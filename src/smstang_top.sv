@@ -188,9 +188,10 @@ reg [7:0] SYSMODE[1];
 reg [7:0] DSW[3];
 
 
+wire ce_cpu_g = ce_cpu & ~overlay;
 system #(63) system
 (
-	.clk_sys(clk_sys), .ce_cpu(ce_cpu), .ce_vdp(ce_vdp),
+	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp),
 	.ce_pix(ce_pix), .ce_sp(ce_sp), .turbo(turbo),
 	.gg(gg), .ggres(ggres), .systeme(systeme),
 	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~reset),
@@ -347,8 +348,8 @@ sms2hdmi sms2hdmi_inst (
 wire [11:0] joy1_btns, joy2_btns;
 wire [11:0] joy1_usb, joy2_usb;
 wire [11:0] joy1_mcu, joy2_mcu;
-assign joy1 = joy1_btns | joy1_usb | joy1_mcu;
-assign joy2 = joy2_btns | joy2_usb | joy2_mcu;
+assign joy1 = overlay ? 12'b0 : joy1_btns | joy1_usb | joy1_mcu;
+assign joy2 = overlay ? 12'b0 : joy2_btns | joy2_usb | joy2_mcu;
 
 controller_ds2 #(.FREQ(53_700_000)) joy1_ds2 (
     .clk(clk_sys), .snes_buttons(joy1_btns),
@@ -390,6 +391,9 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5)
 );
 
 `else
+
+// no OSD menu under verilator, never pause for menu
+wire overlay = 1'b0;
 
 // rom loading is done by sim_main.cpp
 
