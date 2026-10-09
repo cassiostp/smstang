@@ -17,6 +17,7 @@ module sms2hdmi (
     output [7:0] overlay_x,
     output [7:0] overlay_y,
     input [14:0] overlay_color, // BGR5
+    input scanlines,            // 1: dim odd lines to ~25% (core_config[16])
 
 	// video clocks
 	input clk_pixel,
@@ -117,6 +118,11 @@ reg [$clog2(HEIGHT)-1:0] yy ;
 reg [10:0] xcnt             ;
 reg [10:0] ycnt             ;                  // fractional scaling counters
 reg [9:0] cy_r;
+reg scanlines_r, scanlines_rr;  // scanlines synchronized to the pixel clock domain
+always @(posedge clk_pixel) begin
+    scanlines_r <= scanlines;
+    scanlines_rr <= scanlines_r;
+end
 assign mem_portB_addr = yy * WIDTH + xx;
 assign overlay_x = xx;
 assign overlay_y = yy;
@@ -174,11 +180,15 @@ end
 // calc rgb value to hdmi
 reg [23:0] NES_PALETTE [0:63];
 always @(posedge clk_pixel) begin
+    reg [23:0] pixel;
     if (active) begin
         if (overlay)
-            rgb <= {overlay_color[4:0],3'b0,overlay_color[9:5],3'b0,overlay_color[14:10],3'b0};       // BGR5 to RGB8
+            pixel = {overlay_color[4:0],3'b0,overlay_color[9:5],3'b0,overlay_color[14:10],3'b0};       // BGR5 to RGB8
         else
-            rgb <= {mem_portB_rdata[3:0], 4'b0, mem_portB_rdata[7:4], 4'b0, mem_portB_rdata[11:8], 4'b0}; // BGR4 to RGB8
+            pixel = {mem_portB_rdata[3:0], 4'b0, mem_portB_rdata[7:4], 4'b0, mem_portB_rdata[11:8], 4'b0}; // BGR4 to RGB8
+        if (~overlay & scanlines_rr & yy[0])   // scanlines: dim odd lines to ~25%
+            pixel = pixel - {1'b0, pixel[23:1]} - {2'b0, pixel[23:2]};
+        rgb <= pixel;
     end else
         rgb <= 24'h303030;
 end
