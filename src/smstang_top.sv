@@ -182,6 +182,11 @@ wire        nvram_we;
 wire  [7:0] nvram_d;
 wire  [7:0] nvram_q;
 
+// MCU side of the save RAM (iosys_bl616 save-RAM interface, port B below)
+wire [14:0] sv_addr;
+wire  [7:0] sv_din, sv_q;
+wire        sv_we;
+
 // SYSMODE[0]: [0]=EncryptBase,[1]=EncryptBank,[2]=Paddle,[3]=Pedal,[4,5]=E0Type,[6]=E1,[7]=E2
 // SYSMODE[1]: [0]=
 reg [7:0] SYSMODE[1];
@@ -348,6 +353,8 @@ spram #(.widthad_a(14)) ram_inst
 	.q         (ram_q)
 );
 
+// 32 KB battery RAM (64 blocks of 512 B): port A is the game's paged view,
+// port B belongs to iosys's save channel so the MCU can dump/restore it.
 dpram #(.widthad_a(15)) nvram_inst
 (
 	.clock_a     (clk_sys),
@@ -356,10 +363,10 @@ dpram #(.widthad_a(15)) nvram_inst
 	.data_a      (nvram_d),
 	.q_a         (nvram_q),
 	.clock_b     (clk_sys),
-	.address_b   (/*{sd_lba[5:0],sd_buff_addr}*/),
-	.wren_b      (/*sd_buff_wr & sd_ack*/),
-	.data_b      (/*sd_buff_dout*/),
-	.q_b         (/*sd_buff_din*/)
+	.address_b   (sv_addr),
+	.wren_b      (sv_we),
+	.data_b      (sv_din),
+	.q_b         (sv_q)
 );
 
 ////////////////// I/O //////////////////
@@ -414,7 +421,8 @@ usb_hid_host usb_hid_host2 (
 
 assign led = ~{joy1[4:0], usb_type, usb_conerr};
 
-iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5) )     // deep blue smstang logo
+iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5),
+              .SAVE_IF(1), .SAVE_AW(15) )     // deep blue smstang logo, 32 KB battery saves
     sys_inst (
     .clk(clk_sys), .hclk(clk_pixel), .resetn(1'b1),
 
@@ -422,6 +430,8 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5)
     .core_config(core_config),
     .joy1(joy1_btns | joy1_usb), .joy2(joy2_btns | joy2_usb),
     .hid1(joy1_mcu), .hid2(joy2_mcu),
+    .sv_addr(sv_addr), .sv_din(sv_din), .sv_we(sv_we),
+    .sv_q(sv_q), .sv_core_we(nvram_we),
     .uart_tx(UART_TXD), .uart_rx(UART_RXD),
 
     .rom_loading(rom_loading), .rom_do(rom_do), .rom_do_valid(rom_do_valid)
