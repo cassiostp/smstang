@@ -189,6 +189,26 @@ reg [7:0] DSW[3];
 
 
 wire [31:0] core_config;              // from iosys
+
+// SMS Pause button (an NMI on the console): SELECT on either pad, fired on
+// release and only if SELECT was pressed on its own, so the SELECT+START
+// menu/reset combos don't pause the game. A ~1.2 ms low pulse on NMI_n.
+wire        sel_held = joy1[2] | joy2[2];
+wire        sel_other = |(joy1 & ~12'h004) | |(joy2 & ~12'h004);
+reg         sel_r, sel_alone;
+reg [15:0]  sms_pause_cnt;
+always @(posedge clk_sys) begin
+    sel_r <= sel_held;
+    if (sel_held & ~sel_r)
+        sel_alone <= ~sel_other;
+    else if (sel_held & sel_other)
+        sel_alone <= 0;
+    if (~sel_held & sel_r & sel_alone)
+        sms_pause_cnt <= 16'hffff;
+    else if (sms_pause_cnt != 0)
+        sms_pause_cnt <= sms_pause_cnt - 1'b1;
+end
+wire sms_pause_n = sms_pause_cnt == 0;
 wire pause_menu = core_config[17];    // freeze the system while the game menu is open
 wire ce_cpu_g = ce_cpu & ~pause_menu;
 wire ce_vdp_g = ce_vdp & ~pause_menu;
@@ -214,7 +234,7 @@ system #(63) system
 
 	.j2_up(~joy2[4]), .j2_down(~joy2[5]), .j2_left(~joy2[6]),
 	.j2_right(~joy2[7]), .j2_tl(~joy2[0] & ~joy2[3]), .j2_tr(~joy2[8]),
-	.j2_th(joyb_th), .pause(joy1[6]&joy2[6]), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
+	.j2_th(joyb_th), .pause(sms_pause_n), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
 	.j2_coin(swap ? ~joy1[10] : ~joy2[10]), .j2_a3(swap ? ~joy1[8] : ~joy2[8]),
 
 	.j1_tr_out(joya_tr_out), .j1_th_out(joya_th_out), .j2_tr_out(joyb_tr_out),
