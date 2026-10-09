@@ -18,6 +18,7 @@ module sms2hdmi (
     output [7:0] overlay_y,
     input [14:0] overlay_color, // BGR5
     input scanlines,            // 1: darken the last output line of each source line (core_config[16])
+    input gg,                   // 1: Game Gear mode, show the 160x144 window (core_config[0])
 
 	// video clocks
 	input clk_pixel,
@@ -108,6 +109,8 @@ end
 // Video
 // Scale SMS image from 256x192 to 960x720
 // Scale overlay image from 256x224 to 960x720
+// In Game Gear mode, scale the 160x144 window (frame buffer 48..207, 24..167)
+// from the same image to 800x720 (10:9, exactly 5x)
 //
 localparam WIDTH=256;
 localparam HEIGHT=224;
@@ -120,15 +123,23 @@ reg [10:0] ycnt             ;                  // fractional scaling counters
 reg [9:0] cy_r;
 reg last_line;                  // this output line is the last one of its source line
 reg scanlines_r, scanlines_rr;  // scanlines synchronized to the pixel clock domain
+reg gg_r, gg_rr;                // gg synchronized to the pixel clock domain
+wire gg_mode = gg_rr & ~overlay;// scale the 160x144 GG window (overlay keeps full frame)
 always @(posedge clk_pixel) begin
     scanlines_r <= scanlines;
     scanlines_rr <= scanlines_r;
+    gg_r <= gg;
+    gg_rr <= gg_r;
 end
-assign mem_portB_addr = yy * WIDTH + xx;
+// GG: read the 160x144 window at (48,24) in the frame buffer, else the whole frame
+assign mem_portB_addr = gg_mode ? ((yy + 8'd24) * WIDTH + xx + 8'd48)
+                               : (yy * WIDTH + xx);
 assign overlay_x = xx;
 assign overlay_y = yy;
-localparam XSTART = (1280 - 960) / 2;   // 960:720 = 4:3
-localparam XSTOP = (1280 + 960) / 2;
+// image width on screen: 960 (4:3) for the full frame, 800 (10:9) for the GG window
+wire [11:0] XSIZE  = gg_mode ? 12'd800 : 12'd960;
+wire [11:0] XSTART = (12'd1280 - XSIZE) / 2;
+wire [11:0] XSTOP  = (12'd1280 + XSIZE) / 2;
 
 // address calculation
 // Assume the video occupies fully on the Y direction, we are upscaling the video by `720/height`.
@@ -137,8 +148,8 @@ always @(posedge clk_pixel) begin
     reg active_t;
     reg [10:0] xcnt_next;
     reg [10:0] ycnt_next;
-    xcnt_next = xcnt + 256;
-    ycnt_next = ycnt + (overlay ? 224 : 192);
+    xcnt_next = xcnt + (gg_mode ? 11'd160 : 11'd256);   // source px per output px
+    ycnt_next = ycnt + (overlay ? 11'd224 : gg_mode ? 11'd144 : 11'd192);
 
     active_t = 0;
     if (cx == XSTART - 1) begin
@@ -151,8 +162,8 @@ always @(posedge clk_pixel) begin
 
     if (active_t | active) begin        // increment xx
         xcnt <= xcnt_next;
-        if (xcnt_next >= 960) begin
-            xcnt <= xcnt_next - 960;
+        if (xcnt_next >= XSIZE) begin
+            xcnt <= xcnt_next - XSIZE;
             xx <= xx + 1;
         end
     end

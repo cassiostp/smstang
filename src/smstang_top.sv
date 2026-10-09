@@ -138,7 +138,7 @@ end
 
 wire [63:0] status;           // iosys will set this
 
-reg        gg          = 0;
+reg        gg          = 0;   // Game Gear mode, from core_config[0] below
 reg        systeme     = 0;
 reg        palettemode = 0;
 reg [21:0] cart_mask, cart_mask512;
@@ -150,7 +150,7 @@ wire mask_column;
 wire smode_M1, smode_M2, smode_M3;
 wire pal  /* verilator public */ = status[2];
 wire border = status[13] & ~gg;
-wire ggres = ~status[39] & gg;
+wire ggres = gg;              // limit the picture to the GG 160x144 window
 wire turbo = status[40];
 
 wire [15:0] joy_0, joy_1, joy_2, joy_3;
@@ -190,6 +190,12 @@ reg [7:0] DSW[3];
 
 wire [31:0] core_config;              // from iosys
 
+// Game Gear mode (core_config[0]). The firmware sets it before each ROM
+// load, so it is stable long before the load reset starts the system.
+always @(posedge clk_sys) begin
+    gg <= core_config[0];
+end
+
 // SMS Pause button (an NMI on the console): SELECT on either pad, fired on
 // release and only if SELECT was pressed on its own, so the SELECT+START
 // menu/reset combos don't pause the game. A ~1.2 ms low pulse on NMI_n.
@@ -227,9 +233,10 @@ system #(63) system
 	.rom_rd(ram_rd), .rom_a(ram_addr), .rom_do(ram_dout),
 
 	.j1_up(~joy1[4]), .j1_down(~joy1[5]), .j1_left(~joy1[6]),
-	.j1_right(~joy1[7]), .j1_tl(~joy1[0] & ~joy1[3]), 	// j1_t1 is button 1 (also start). joy1[0] is B, joy1[3] is START
+	.j1_right(~joy1[7]), .j1_tl(gg ? ~joy1[0] : (~joy1[0] & ~joy1[3])), 	// j1_t1 is button 1 (also start in SMS). joy1[0] is B, joy1[3] is START
 	.j1_tr(~joy1[8]),
-	.j1_th(joya_th), .j1_start(swap ? ~joy1[3] : ~joy2[3]), .j1_coin(swap ? ~joy1[11] : ~joy1[11]),
+	.j1_th(gg ? ~joy1[3] : joya_th), 	// the GG Start button sits on port 0's TH line
+	.j1_start(swap ? ~joy1[3] : ~joy2[3]), .j1_coin(swap ? ~joy1[11] : ~joy1[11]),
 	.j1_a3(swap ? ~joy1[10] : ~joy1[10]),
 
 	.j2_up(~joy2[4]), .j2_down(~joy2[5]), .j2_left(~joy2[6]),
@@ -368,6 +375,7 @@ sms2hdmi sms2hdmi_inst (
     .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
     .scanlines(core_config[16]),
+    .gg(gg),
 	.tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
 );
 
