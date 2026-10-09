@@ -352,7 +352,6 @@ always @(posedge clk) begin
                     send_idx <= send_idx + 1;
                     if (send_idx == 4) begin
                         send_state <= SEND_IDLE;
-                        response_ack <= response_req;
                     end
                 end
             end

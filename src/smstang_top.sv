@@ -188,10 +188,36 @@ reg [7:0] SYSMODE[1];
 reg [7:0] DSW[3];
 
 
+wire [31:0] core_config;              // from iosys
+
+// SMS Pause button (an NMI on the console): SELECT on either pad, fired on
+// release and only if SELECT was pressed on its own, so the SELECT+START
+// menu/reset combos don't pause the game. A ~1.2 ms low pulse on NMI_n.
+wire        sel_held = joy1[2] | joy2[2];
+wire        sel_other = |(joy1 & ~12'h004) | |(joy2 & ~12'h004);
+reg         sel_r, sel_alone;
+reg [15:0]  sms_pause_cnt;
+always @(posedge clk_sys) begin
+    sel_r <= sel_held;
+    if (sel_held & ~sel_r)
+        sel_alone <= ~sel_other;
+    else if (sel_held & sel_other)
+        sel_alone <= 0;
+    if (~sel_held & sel_r & sel_alone)
+        sms_pause_cnt <= 16'hffff;
+    else if (sms_pause_cnt != 0)
+        sms_pause_cnt <= sms_pause_cnt - 1'b1;
+end
+wire sms_pause_n = sms_pause_cnt == 0;
+wire pause_menu = core_config[17];    // freeze the system while the game menu is open
+wire ce_cpu_g = ce_cpu & ~pause_menu;
+wire ce_vdp_g = ce_vdp & ~pause_menu;
+wire ce_pix_g = ce_pix & ~pause_menu;
+wire ce_sp_g  = ce_sp  & ~pause_menu;
 system #(63) system
 (
-	.clk_sys(clk_sys), .ce_cpu(ce_cpu), .ce_vdp(ce_vdp),
-	.ce_pix(ce_pix), .ce_sp(ce_sp), .turbo(turbo),
+	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp_g),
+	.ce_pix(ce_pix_g), .ce_sp(ce_sp_g), .turbo(turbo),
 	.gg(gg), .ggres(ggres), .systeme(systeme),
 	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~reset),
 
@@ -208,7 +234,7 @@ system #(63) system
 
 	.j2_up(~joy2[4]), .j2_down(~joy2[5]), .j2_left(~joy2[6]),
 	.j2_right(~joy2[7]), .j2_tl(~joy2[0] & ~joy2[3]), .j2_tr(~joy2[8]),
-	.j2_th(joyb_th), .pause(joy1[6]&joy2[6]), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
+	.j2_th(joyb_th), .pause(sms_pause_n), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
 	.j2_coin(swap ? ~joy1[10] : ~joy2[10]), .j2_a3(swap ? ~joy1[8] : ~joy2[8]),
 
 	.j1_tr_out(joya_tr_out), .j1_th_out(joya_th_out), .j2_tr_out(joyb_tr_out),
@@ -246,7 +272,7 @@ wire HBlank, VBlank;
 video video
 (
 	.clk(clk_sys),
-	.ce_pix(ce_pix),
+	.ce_pix(ce_pix_g),
 	.pal(pal),
 	.ggres(ggres),
 	.border(border),
@@ -339,16 +365,17 @@ wire [14:0] overlay_color;
 sms2hdmi sms2hdmi_inst (
 	.clk(clk_sys), .resetn(1'b1),
 	.clk_pixel(clk_pixel),.clk_5x_pixel(clk_5x_pixel),
-    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(audio_l), .audio_r(audio_r),
+    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
+    .scanlines(core_config[16]),
 	.tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
 );
 
 wire [11:0] joy1_btns, joy2_btns;
 wire [11:0] joy1_usb, joy2_usb;
 wire [11:0] joy1_mcu, joy2_mcu;
-assign joy1 = joy1_btns | joy1_usb | joy1_mcu;
-assign joy2 = joy2_btns | joy2_usb | joy2_mcu;
+assign joy1 = overlay ? 12'b0 : joy1_btns | joy1_usb | joy1_mcu;
+assign joy2 = overlay ? 12'b0 : joy2_btns | joy2_usb | joy2_mcu;
 
 controller_ds2 #(.FREQ(53_700_000)) joy1_ds2 (
     .clk(clk_sys), .snes_buttons(joy1_btns),
@@ -382,6 +409,7 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5)
     .clk(clk_sys), .hclk(clk_pixel), .resetn(1'b1),
 
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
+    .core_config(core_config),
     .joy1(joy1_btns | joy1_usb), .joy2(joy2_btns | joy2_usb),
     .hid1(joy1_mcu), .hid2(joy2_mcu),
     .uart_tx(UART_TXD), .uart_rx(UART_RXD),
@@ -390,6 +418,9 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5)
 );
 
 `else
+
+// no OSD menu under verilator, never pause for menu
+wire overlay = 1'b0;
 
 // rom loading is done by sim_main.cpp
 
