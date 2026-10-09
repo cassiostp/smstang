@@ -17,7 +17,7 @@ module sms2hdmi (
     output [7:0] overlay_x,
     output [7:0] overlay_y,
     input [14:0] overlay_color, // BGR5
-    input scanlines,            // 1: darken every 3rd output line of a source line (core_config[16])
+    input scanlines,            // 1: darken the last output line of each source line (core_config[16])
 
 	// video clocks
 	input clk_pixel,
@@ -118,7 +118,7 @@ reg [$clog2(HEIGHT)-1:0] yy ;
 reg [10:0] xcnt             ;
 reg [10:0] ycnt             ;                  // fractional scaling counters
 reg [9:0] cy_r;
-reg [1:0] line_in_group;    // output line index (0..) within one source line's group
+reg last_line;                  // this output line is the last one of its source line
 reg scanlines_r, scanlines_rr;  // scanlines synchronized to the pixel clock domain
 always @(posedge clk_pixel) begin
     scanlines_r <= scanlines;
@@ -163,9 +163,9 @@ always @(posedge clk_pixel) begin
         if (ycnt_next >= 720) begin
             ycnt <= ycnt_next - 720;
             yy <= yy + 1;
-            line_in_group <= 0;         // start of a new source line
-        end else if (line_in_group != 2'd2)
-            line_in_group <= line_in_group + 1;
+        end
+        // scanlines: the next line is the last of its source line if one more step crosses 720
+        last_line <= (ycnt_next >= 720 ? ycnt_next - 11'd720 : ycnt_next) + (ycnt_next - ycnt) >= 11'd720;
     end
 
     if (cx == 0) begin
@@ -176,7 +176,7 @@ always @(posedge clk_pixel) begin
     if (cy == 0) begin
         yy <= 0;
         ycnt <= 0;
-        line_in_group <= 0;
+        last_line <= 0;
     end 
 
 end
@@ -190,7 +190,7 @@ always @(posedge clk_pixel) begin
             pixel = {overlay_color[4:0],3'b0,overlay_color[9:5],3'b0,overlay_color[14:10],3'b0};       // BGR5 to RGB8
         else
             pixel = {mem_portB_rdata[3:0], 4'b0, mem_portB_rdata[7:4], 4'b0, mem_portB_rdata[11:8], 4'b0}; // BGR4 to RGB8
-        if (~overlay & scanlines_rr & line_in_group == 2'd2)   // scanlines: darken the 3rd output line of each source line to ~50%
+        if (~overlay & scanlines_rr & last_line)   // scanlines: darken the last output line of each source line to ~50%
             pixel = {pixel[23:1], 1'b0, pixel[15:1], 1'b0, pixel[7:1], 1'b0};
         rgb <= pixel;
     end else
