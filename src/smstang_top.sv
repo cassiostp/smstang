@@ -196,6 +196,8 @@ always @(posedge clk_sys) begin
     gg <= core_config[0];
 end
 
+// In GG mode `pause` is the Start button instead: io.v reads it as a level
+// at port $00 bit 7 (and the NMI is off). Pad 1's START.
 // SMS Pause button (an NMI on the console): SELECT on either pad, fired on
 // release and only if SELECT was pressed on its own, so the SELECT+START
 // menu/reset combos don't pause the game. A ~1.2 ms low pulse on NMI_n.
@@ -235,13 +237,13 @@ system #(63) system
 	.j1_up(~joy1[4]), .j1_down(~joy1[5]), .j1_left(~joy1[6]),
 	.j1_right(~joy1[7]), .j1_tl(gg ? ~joy1[0] : (~joy1[0] & ~joy1[3])), 	// j1_t1 is button 1 (also start in SMS). joy1[0] is B, joy1[3] is START
 	.j1_tr(~joy1[8]),
-	.j1_th(gg ? ~joy1[3] : joya_th), 	// the GG Start button sits on port 0's TH line
+	.j1_th(joya_th),
 	.j1_start(swap ? ~joy1[3] : ~joy2[3]), .j1_coin(swap ? ~joy1[11] : ~joy1[11]),
 	.j1_a3(swap ? ~joy1[10] : ~joy1[10]),
 
 	.j2_up(~joy2[4]), .j2_down(~joy2[5]), .j2_left(~joy2[6]),
 	.j2_right(~joy2[7]), .j2_tl(~joy2[0] & ~joy2[3]), .j2_tr(~joy2[8]),
-	.j2_th(joyb_th), .pause(sms_pause_n), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
+	.j2_th(joyb_th), .pause(gg ? ~joy1[3] : sms_pause_n), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
 	.j2_coin(swap ? ~joy1[10] : ~joy2[10]), .j2_a3(swap ? ~joy1[8] : ~joy2[8]),
 
 	.j1_tr_out(joya_tr_out), .j1_th_out(joya_th_out), .j2_tr_out(joyb_tr_out),
