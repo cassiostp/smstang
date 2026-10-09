@@ -341,12 +341,14 @@ wire overlay;
 wire [7:0] overlay_x;
 wire [7:0] overlay_y;
 wire [14:0] overlay_color;
+wire [31:0] core_config;        // option bits from BL616, see iosys_bl616. bit 16: scanlines
 
 sms2hdmi sms2hdmi_inst (
 	.clk(clk_sys), .resetn(1'b1),
 	.clk_pixel(clk_pixel),.clk_5x_pixel(clk_5x_pixel),
     .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
+    .scanlines(core_config[16]),
 	.tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
 );
 
@@ -393,7 +395,8 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5)
     .hid1(joy1_mcu), .hid2(joy2_mcu),
     .uart_tx(UART_TXD), .uart_rx(UART_RXD),
 
-    .rom_loading(rom_loading), .rom_do(rom_do), .rom_do_valid(rom_do_valid)
+    .rom_loading(rom_loading), .rom_do(rom_do), .rom_do_valid(rom_do_valid),
+    .core_config(core_config)
 );
 
 `else
