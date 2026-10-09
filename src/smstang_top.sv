@@ -188,11 +188,16 @@ reg [7:0] SYSMODE[1];
 reg [7:0] DSW[3];
 
 
-wire ce_cpu_g = ce_cpu & ~overlay;
+wire [31:0] core_config;              // from iosys
+wire pause_menu = core_config[17];    // freeze the system while the game menu is open
+wire ce_cpu_g = ce_cpu & ~pause_menu;
+wire ce_vdp_g = ce_vdp & ~pause_menu;
+wire ce_pix_g = ce_pix & ~pause_menu;
+wire ce_sp_g  = ce_sp  & ~pause_menu;
 system #(63) system
 (
-	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp),
-	.ce_pix(ce_pix), .ce_sp(ce_sp), .turbo(turbo),
+	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp_g),
+	.ce_pix(ce_pix_g), .ce_sp(ce_sp_g), .turbo(turbo),
 	.gg(gg), .ggres(ggres), .systeme(systeme),
 	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~reset),
 
@@ -247,7 +252,7 @@ wire HBlank, VBlank;
 video video
 (
 	.clk(clk_sys),
-	.ce_pix(ce_pix),
+	.ce_pix(ce_pix_g),
 	.pal(pal),
 	.ggres(ggres),
 	.border(border),
@@ -340,7 +345,7 @@ wire [14:0] overlay_color;
 sms2hdmi sms2hdmi_inst (
 	.clk(clk_sys), .resetn(1'b1),
 	.clk_pixel(clk_pixel),.clk_5x_pixel(clk_5x_pixel),
-    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(audio_l), .audio_r(audio_r),
+    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
 	.tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
 );
@@ -383,6 +388,7 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5)
     .clk(clk_sys), .hclk(clk_pixel), .resetn(1'b1),
 
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
+    .core_config(core_config),
     .joy1(joy1_btns | joy1_usb), .joy2(joy2_btns | joy2_usb),
     .hid1(joy1_mcu), .hid2(joy2_mcu),
     .uart_tx(UART_TXD), .uart_rx(UART_RXD),
