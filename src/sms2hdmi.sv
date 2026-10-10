@@ -21,6 +21,7 @@ module sms2hdmi (
     input [1:0] sl_darkness,    // core_config[19:18]: 25, 50, 75, 100 % dark
     input sl_thick,             // core_config[20]: thick lines
     input sl_out,               // core_config[21]: dark output rows instead of an integer scale
+    input [31:0] video_config,  // colour controls, CRT mask and (Game Gear only) LCD grid, see video_fx.v
     input gg,                   // 1: Game Gear mode, show the 160x144 window (core_config[0])
 
 	// video clocks
@@ -120,8 +121,11 @@ end
 localparam WIDTH=256;
 localparam HEIGHT=224;
 wire [23:0] rgb;            // actual RGB output
-reg [23:0] rgb_pre;         // before the scanline darkening
+reg [23:0] rgb_pre;         // before video_fx
+reg pic_pre;                // rgb_pre is a pixel of the picture, not the border or the overlay
 reg dark_pre;
+reg col_s1;                // the grid's last-column flag on its way to rgb_pre
+reg col_pre, row_pre;       // with rgb_pre into video_fx
 reg active                  ;
 reg [$clog2(WIDTH)-1:0] xx  ; // scaled-down pixel position
 reg [$clog2(HEIGHT)-1:0] yy ;
@@ -130,21 +134,26 @@ reg [10:0] ycnt             ;                  // fractional scaling counters
 reg [9:0] cy_r;
 reg gg_r, gg_rr;                // gg synchronized to the pixel clock domain
 wire gg_mode = gg_rr & ~overlay;// scale the 160x144 GG window (overlay keeps full frame)
-always @(posedge clk_pixel) begin
-    gg_r <= gg;
+wire [31:0] vcfg_fx = gg_mode ? video_config : {video_config[31:16], 1'b0, video_config[14:0]};
+always @(posedge clk_pixel) begin // the LCD grid is Game Gear only: in SMS mode bit 15 is
+    gg_r <= gg;             // cleared before video_fx, so the geometry never depends on it
     gg_rr <= gg_r;
 end
 
 // scanlines: sl_geom frames are scaled by a whole number of rows per source line
-wire sl_geom, sl_show, sl_dark;
+// The Game Gear window is 5 rows and 5 columns per source pixel either way, so with
+// the grid on (video_config[15]) sl_rows just takes the integer geometry for its
+// `last` flag; the picture does not move.
+wire sl_geom, sl_show, sl_dark, sl_last;
 wire [7:0] sl_yy;
 wire [1:0] sl_dk;
 sl_rows sl (
     .clk(clk_pixel), .cy(cy),
-    .cfg_on(scanlines), .cfg_dark(sl_darkness), .cfg_thick(sl_thick), .cfg_out(sl_out), .hide(overlay),
+    .cfg_on(scanlines), .cfg_dark(sl_darkness), .cfg_thick(sl_thick), .cfg_out(sl_out),
+    .cfg_grid(gg_mode & video_config[15]), .hide(overlay),
     .rows(gg_mode ? 3'd5 : 3'd3), .dark_thin(gg_mode ? 3'd2 : 3'd1), .dark_thick(gg_mode ? 3'd3 : 3'd2),
     .lines(gg_mode ? 8'd144 : 8'd192), .top(gg_mode ? 10'd0 : 10'd72),
-    .geom(sl_geom), .pic_top(), .yy(sl_yy), .show(sl_show), .dark(sl_dark), .darkness(sl_dk)
+    .geom(sl_geom), .pic_top(), .yy(sl_yy), .show(sl_show), .dark(sl_dark), .last(sl_last), .darkness(sl_dk)
 );
 reg [7:0] yy_s;             // source line to show
 always @(posedge clk_pixel) yy_s <= sl_geom ? sl_yy : yy;
@@ -163,8 +172,12 @@ wire [11:0] XSTOP  = (12'd1280 + XSIZE) >> 1;
 // address calculation
 // Assume the video occupies fully on the Y direction, we are upscaling the video by `720/height`.
 // xcnt and ycnt are fractional scaling counters.
-// The scanline darkening is a register stage after rgb_pre, so active starts one clock
-// earlier than the picture it frames.
+// video_fx follows rgb_pre with FX_LAT register stages. Its first stage is the one that sl_dim
+// used to be (active started at XSTART - 2 then), so active starts FX_LAT - 1 clocks earlier
+// than that, at XSTART - 1 - FX_LAT. The xx/xcnt counters, and so the overlay lookup, run with it.
+// col_s1 carries the grid's last-column flag (the address cycle's wrap, which says the pixel
+// addressed on the previous clock was the last column of its source pixel) to rgb_pre.
+localparam FX_LAT = 10;     // clocks from rgb_pre to rgb, see video_fx.v
 always @(posedge clk_pixel) begin
     reg active_t;
     reg [10:0] xcnt_next;
@@ -173,13 +186,15 @@ always @(posedge clk_pixel) begin
     ycnt_next = ycnt + (overlay ? 11'd224 : gg_mode ? 11'd144 : 11'd192);
 
     active_t = 0;
-    if ({1'b0, cx} == XSTART - 12'd2) begin
+    if ({1'b0, cx} == XSTART - 12'd1 - FX_LAT) begin
         active_t = 1;
         active <= 1;
-    end else if ({1'b0, cx} == XSTOP - 12'd2) begin
+    end else if ({1'b0, cx} == XSTOP - 12'd1 - FX_LAT) begin
         active_t = 0;
         active <= 0;
     end
+
+    col_s1 <= gg_mode & (active_t | active) & (xcnt_next >= XSIZE);
 
     if (active_t | active) begin        // increment xx
         xcnt <= xcnt_next;
@@ -220,9 +235,19 @@ always @(posedge clk_pixel) begin
             rgb_pre <= {mem_portB_rdata[3:0], 4'b0, mem_portB_rdata[7:4], 4'b0, mem_portB_rdata[11:8], 4'b0}; // BGR4 to RGB8
     end else
         rgb_pre <= 24'h303030;
+    pic_pre <= active & sl_show & ~overlay;
     dark_pre <= active & sl_show & ~overlay & sl_dark;
+    col_pre <= col_s1;
+    row_pre <= gg_mode & active & sl_show & ~overlay & sl_last;
 end
-sl_dim dim (.clk(clk_pixel), .rgb_in(rgb_pre), .dark(dark_pre), .darkness(sl_dk), .rgb_out(rgb));
+
+// colour controls, the scanline darkening, the LCD grid (Game Gear only) and the CRT mask
+video_fx fx (
+    .clk(clk_pixel), .cx(cx), .cy(cy), .video_config(vcfg_fx),
+    .rgb_in(rgb_pre), .pic_in(pic_pre), .dark_in(dark_pre), .darkness(sl_dk),
+    .col_last_in(col_pre), .row_last_in(row_pre),
+    .rgb_out(rgb)
+);
 
 // HDMI output.
 logic[2:0] tmds;
