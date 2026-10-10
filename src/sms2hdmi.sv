@@ -177,7 +177,7 @@ wire [11:0] XSTOP  = (12'd1280 + XSIZE) >> 1;
 // than that, at XSTART - 1 - FX_LAT. The xx/xcnt counters, and so the overlay lookup, run with it.
 // col_s1 carries the grid's last-column flag (the address cycle's wrap, which says the pixel
 // addressed on the previous clock was the last column of its source pixel) to rgb_pre.
-localparam FX_LAT = 10;     // clocks from rgb_pre to rgb, see video_fx.v
+localparam FX_LAT = 11;     // clocks from rgb_pre to rgb, see video_fx.v
 always @(posedge clk_pixel) begin
     reg active_t;
     reg [10:0] xcnt_next;

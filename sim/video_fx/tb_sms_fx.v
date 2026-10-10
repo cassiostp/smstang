@@ -13,7 +13,7 @@
 
 module tb_sms_fx;
 
-    localparam FX_LAT = 10;
+    localparam FX_LAT = 11;
     localparam BORDER = 24'h303030;
     localparam GG_XSTART = 240;             // the Game Gear window is 800 wide, centred
     localparam GG_XSTOP = 1040;
