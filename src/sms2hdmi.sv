@@ -17,7 +17,10 @@ module sms2hdmi (
     output [7:0] overlay_x,
     output [7:0] overlay_y,
     input [14:0] overlay_color, // BGR5
-    input scanlines,            // 1: darken the last output line of each source line (core_config[16])
+    input scanlines,            // core_config[16]: scanlines on
+    input [1:0] sl_darkness,    // core_config[19:18]: 25, 50, 75, 100 % dark
+    input sl_thick,             // core_config[20]: thick lines
+    input sl_out,               // core_config[21]: dark output rows instead of an integer scale
     input gg,                   // 1: Game Gear mode, show the 160x144 window (core_config[0])
 
 	// video clocks
@@ -111,39 +114,57 @@ end
 // Scale overlay image from 256x224 to 960x720
 // In Game Gear mode, scale the 160x144 window (frame buffer 48..207, 24..167)
 // from the same image to 800x720 (10:9, exactly 5x)
+// See scanlines.v for the scanline geometry: with scanlines on, the SMS image is
+// 3x3, 768x576 centred; the Game Gear window is already 5 rows per line.
 //
 localparam WIDTH=256;
 localparam HEIGHT=224;
-reg [23:0] rgb;             // actual RGB output
+wire [23:0] rgb;            // actual RGB output
+reg [23:0] rgb_pre;         // before the scanline darkening
+reg dark_pre;
 reg active                  ;
 reg [$clog2(WIDTH)-1:0] xx  ; // scaled-down pixel position
 reg [$clog2(HEIGHT)-1:0] yy ;
 reg [10:0] xcnt             ;
 reg [10:0] ycnt             ;                  // fractional scaling counters
 reg [9:0] cy_r;
-reg last_line;                  // this output line is the last one of its source line
-reg scanlines_r, scanlines_rr;  // scanlines synchronized to the pixel clock domain
 reg gg_r, gg_rr;                // gg synchronized to the pixel clock domain
 wire gg_mode = gg_rr & ~overlay;// scale the 160x144 GG window (overlay keeps full frame)
 always @(posedge clk_pixel) begin
-    scanlines_r <= scanlines;
-    scanlines_rr <= scanlines_r;
     gg_r <= gg;
     gg_rr <= gg_r;
 end
+
+// scanlines: sl_geom frames are scaled by a whole number of rows per source line
+wire sl_geom, sl_show, sl_dark;
+wire [7:0] sl_yy;
+wire [1:0] sl_dk;
+sl_rows sl (
+    .clk(clk_pixel), .cy(cy),
+    .cfg_on(scanlines), .cfg_dark(sl_darkness), .cfg_thick(sl_thick), .cfg_out(sl_out), .hide(overlay),
+    .rows(gg_mode ? 3'd5 : 3'd3), .dark_thin(gg_mode ? 3'd2 : 3'd1), .dark_thick(gg_mode ? 3'd3 : 3'd2),
+    .lines(gg_mode ? 8'd144 : 8'd192), .top(gg_mode ? 10'd0 : 10'd72),
+    .geom(sl_geom), .pic_top(), .yy(sl_yy), .show(sl_show), .dark(sl_dark), .darkness(sl_dk)
+);
+reg [7:0] yy_s;             // source line to show
+always @(posedge clk_pixel) yy_s <= sl_geom ? sl_yy : yy;
+
 // GG: read the 160x144 window at (48,24) in the frame buffer, else the whole frame
-assign mem_portB_addr = gg_mode ? ((yy + 8'd24) * WIDTH + xx + 8'd48)
-                               : (yy * WIDTH + xx);
+assign mem_portB_addr = gg_mode ? ((yy_s + 8'd24) * WIDTH + xx + 8'd48)
+                               : (yy_s * WIDTH + xx);
 assign overlay_x = xx;
-assign overlay_y = yy;
-// image width on screen: 960 (4:3) for the full frame, 800 (10:9) for the GG window
-wire [11:0] XSIZE  = gg_mode ? 12'd800 : 12'd960;
-wire [11:0] XSTART = (12'd1280 - XSIZE) / 2;
-wire [11:0] XSTOP  = (12'd1280 + XSIZE) / 2;
+assign overlay_y = yy_s;
+// image width on screen: 960 (4:3) for the full frame, 768 (4:3 on 576 rows) for the
+// full frame with scanlines, 800 (10:9) for the GG window
+wire [11:0] XSIZE  = gg_mode ? 12'd800 : sl_geom ? 12'd768 : 12'd960;
+wire [11:0] XSTART = (12'd1280 - XSIZE) >> 1;
+wire [11:0] XSTOP  = (12'd1280 + XSIZE) >> 1;
 
 // address calculation
 // Assume the video occupies fully on the Y direction, we are upscaling the video by `720/height`.
 // xcnt and ycnt are fractional scaling counters.
+// The scanline darkening is a register stage after rgb_pre, so active starts one clock
+// earlier than the picture it frames.
 always @(posedge clk_pixel) begin
     reg active_t;
     reg [10:0] xcnt_next;
@@ -152,10 +173,10 @@ always @(posedge clk_pixel) begin
     ycnt_next = ycnt + (overlay ? 11'd224 : gg_mode ? 11'd144 : 11'd192);
 
     active_t = 0;
-    if (cx == XSTART - 1) begin
+    if ({1'b0, cx} == XSTART - 12'd2) begin
         active_t = 1;
         active <= 1;
-    end else if (cx == XSTOP - 1) begin
+    end else if ({1'b0, cx} == XSTOP - 12'd2) begin
         active_t = 0;
         active <= 0;
     end
@@ -175,8 +196,6 @@ always @(posedge clk_pixel) begin
             ycnt <= ycnt_next - 720;
             yy <= yy + 1;
         end
-        // scanlines: the next line is the last of its source line if one more step crosses 720
-        last_line <= (ycnt_next >= 720 ? ycnt_next - 11'd720 : ycnt_next) + (ycnt_next - ycnt) >= 11'd720;
     end
 
     if (cx == 0) begin
@@ -187,7 +206,6 @@ always @(posedge clk_pixel) begin
     if (cy == 0) begin
         yy <= 0;
         ycnt <= 0;
-        last_line <= 0;
     end 
 
 end
@@ -195,18 +213,16 @@ end
 // calc rgb value to hdmi
 reg [23:0] NES_PALETTE [0:63];
 always @(posedge clk_pixel) begin
-    reg [23:0] pixel;
-    if (active) begin
+    if (active & sl_show) begin
         if (overlay)
-            pixel = {overlay_color[4:0],3'b0,overlay_color[9:5],3'b0,overlay_color[14:10],3'b0};       // BGR5 to RGB8
+            rgb_pre <= {overlay_color[4:0],3'b0,overlay_color[9:5],3'b0,overlay_color[14:10],3'b0};       // BGR5 to RGB8
         else
-            pixel = {mem_portB_rdata[3:0], 4'b0, mem_portB_rdata[7:4], 4'b0, mem_portB_rdata[11:8], 4'b0}; // BGR4 to RGB8
-        if (~overlay & scanlines_rr & last_line)   // scanlines: darken the last output line of each source line to ~50%
-            pixel = {pixel[23:1], 1'b0, pixel[15:1], 1'b0, pixel[7:1], 1'b0};
-        rgb <= pixel;
+            rgb_pre <= {mem_portB_rdata[3:0], 4'b0, mem_portB_rdata[7:4], 4'b0, mem_portB_rdata[11:8], 4'b0}; // BGR4 to RGB8
     end else
-        rgb <= 24'h303030;
+        rgb_pre <= 24'h303030;
+    dark_pre <= active & sl_show & ~overlay & sl_dark;
 end
+sl_dim dim (.clk(clk_pixel), .rgb_in(rgb_pre), .dark(dark_pre), .darkness(sl_dk), .rgb_out(rgb));
 
 // HDMI output.
 logic[2:0] tmds;
