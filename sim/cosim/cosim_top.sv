@@ -54,7 +54,7 @@
 //   runs at pure UART speed (~16 ms for 64 blocks at 2 Mbaud).
 //
 // OBSERVABILITY (all real unless noted)
-//   core_config/overlay: straight out of iosys (expect-config-bit reads the
+//   core_config/video_config/overlay: straight out of iosys (expect-config-bit reads the
 //   real register). rom_bytes: ROM payload bytes consumed (firmware streams
 //   the ROM; no loader parses it here; SMS headers are not inspected by the
 //   loader). OSD text / nvram: read by the C++ bridge DIRECTLY out of the
@@ -75,6 +75,7 @@ module cosim_top (
     input wire [15:0] cosim_core_id,
 
     output wire [31:0] core_config,
+    output wire [31:0] video_config,
     output wire overlay,
     output reg [31:0] rom_bytes,
     // TX-pending for the bridge's idle jump: a reply owed or a frame on the
@@ -147,6 +148,7 @@ iosys_bl616_cosim #(
     .sv_q(sv_q),
     .sv_core_we(game_we),
     .core_config(core_config),
+    .video_config(video_config),
     .uart_rx(uart_rx_iosys),
     .uart_tx(uart_tx_iosys)
 );

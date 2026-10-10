@@ -46,6 +46,7 @@ module iosys_bl616 #(
     output reg rom_do_valid,        // strobe for rom_do
     
     output reg [31:0] core_config,
+    output reg [31:0] video_config,     // see video_fx.v
 
     // Save-RAM port (SAVE_IF=1 only; tie inputs to 0 and leave outputs open otherwise).
     // Same clock as `clk`. The core owns the other port of a dual-port RAM.
@@ -167,6 +168,7 @@ reg response_ack;
 // 0x09 hid1[15:0] hid2[15:0] send USB joystick state to FPGA
 // 0x11 blk[15:0] <512 bytes> write one block into save RAM (SAVE_IF only)
 // 0x12 blk[15:0]             request one save-RAM block (SAVE_IF only)
+// 0x13 x[31:0]               set video config (video_fx.v)
 //
 // Response payloads from FPGA to BL616:
 // 0x01 core_id[7:0]          core ID
@@ -185,6 +187,7 @@ always @(posedge clk) begin
         rom_loading <= 0;
         rom_remain <= 0;
         core_config <= 0;
+        video_config <= 0;
         data_cnt <= 0;
         x_wr <= 0;
         y_wr <= 0;
@@ -294,6 +297,11 @@ always @(posedge clk) begin
                         else if (data_cnt == 1) begin
                             sv_req_blk[7:0] <= rx_data;
                             sv_rd_req <= ~sv_rd_req;
+                        end
+                    end
+                    'h13: begin                    // set video config (video_fx.v)
+                        if (data_cnt == 3) begin    // Received 4 bytes
+                            video_config <= {data_reg[23:0], rx_data};
                         end
                     end
                     default: begin
