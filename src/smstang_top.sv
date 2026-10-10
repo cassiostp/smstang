@@ -194,6 +194,7 @@ reg [7:0] DSW[3];
 
 
 wire [31:0] core_config;              // from iosys
+wire [31:0] video_config;             // from iosys
 
 // Game Gear mode (core_config[0]). The firmware sets it before each ROM
 // load, so it is stable long before the load reset starts the system.
@@ -384,6 +385,7 @@ sms2hdmi sms2hdmi_inst (
     .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
     .scanlines(core_config[16]), .sl_darkness(core_config[19:18]), .sl_thick(core_config[20]), .sl_out(core_config[21]),
+    .video_config(video_config),
     .gg(gg),
 	.tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
 );
@@ -427,7 +429,7 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5)
     .clk(clk_sys), .hclk(clk_pixel), .resetn(1'b1),
 
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
-    .core_config(core_config),
+    .core_config(core_config), .video_config(video_config),
     .joy1(joy1_btns | joy1_usb), .joy2(joy2_btns | joy2_usb),
     .hid1(joy1_mcu), .hid2(joy2_mcu),
     .sv_addr(sv_addr), .sv_din(sv_din), .sv_we(sv_we),

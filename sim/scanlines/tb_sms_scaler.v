@@ -25,6 +25,7 @@ module tb_sms_scaler;
         .audio_l(16'd0), .audio_r(16'd0),
         .overlay(ov), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
         .scanlines(sl_on), .sl_darkness(sl_dark), .sl_thick(sl_thick), .sl_out(sl_out),
+        .video_config(32'd0),
         .gg(gg),
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
