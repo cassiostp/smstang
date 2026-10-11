@@ -3,9 +3,11 @@
 #   vec_*.hex           test vectors from the golden model (model.py gen)
 #   build/*_base.*      the scaler before video_fx, from git history ($BASE), with the module
 #                       names suffixed _base so that both can be in one simulation
+#   build/sms2hdmi_fx.sv  the scaler with video_fx and without smoothing ($FXBASE), as sms2hdmi_fx
 set -e
 cd "$(dirname "$0")"
 BASE=${BASE:-feature/cosim}     # the last commit without video_fx
+FXBASE=${FXBASE:-9862515}       # the last commit without smoothing
 python3 -I model.py selfcheck
 python3 -I model.py gen
 mkdir -p build
@@ -16,6 +18,8 @@ git show $BASE:src/sms2hdmi.sv | sed \
 git show $BASE:src/scanlines.v | sed \
     -e 's/^module sl_rows (/module sl_rows_base (/' \
     -e 's/^module sl_dim (/module sl_dim_base (/' > build/scanlines_base.v
+git show $FXBASE:src/sms2hdmi.sv | sed -e 's/^module sms2hdmi (/module sms2hdmi_fx (/' > build/sms2hdmi_fx.sv
+grep -q '^module sms2hdmi_fx (' build/sms2hdmi_fx.sv
 grep -q '^module sms2hdmi_base (' build/sms2hdmi_base.sv
 grep -q '^sl_rows_base sl (' build/sms2hdmi_base.sv
 grep -q '^sl_dim_base dim (' build/sms2hdmi_base.sv
