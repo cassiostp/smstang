@@ -309,6 +309,15 @@ end
 localparam [7:0] W_THIRD = 8'd85;             // round(256 / 3)
 localparam [7:0] W_FIFTH_1 = 8'd51;           // round(256 / 5)
 localparam [7:0] W_FIFTH_2 = 8'd102;          // round(2 * 256 / 5)
+// the first/last line, registered: comparing yy_s here would put the line compares on
+// the way into smooth's vertical blend (wy below), which misses setup on 138K. The flag
+// is a clock late, so a blend latched within a clock of a line change can use the line
+// before's weight; the sims cover those rows.
+reg yy_first = 1'b0, yy_last = 1'b0;
+always @(posedge clk_pixel) begin
+    yy_first <= (yy_s == 8'd0);
+    yy_last <= (yy_s == lines - 8'd1);
+end
 reg [7:0] wy_g;
 reg vnext_g;
 always @(*) begin
@@ -320,7 +329,7 @@ always @(*) begin
             3'd4: begin vnext_g = 1'b1; wy_g = W_FIFTH_2; end
             default: begin vnext_g = 1'b0; wy_g = 8'd0; end
         endcase
-        if ((rphase < 3'd2 && yy_s == 8'd0) || (rphase > 3'd2 && yy_s == lines - 8'd1))
+        if ((rphase < 3'd2 && yy_first) || (rphase > 3'd2 && yy_last))
             wy_g = 8'd0;
     end else begin
         case (rphase)
@@ -328,7 +337,7 @@ always @(*) begin
             3'd2: begin vnext_g = 1'b1; wy_g = W_THIRD; end
             default: begin vnext_g = 1'b0; wy_g = 8'd0; end
         endcase
-        if ((rphase == 3'd0 && yy_s == 8'd0) || (rphase == 3'd2 && yy_s == lines - 8'd1))
+        if ((rphase == 3'd0 && yy_first) || (rphase == 3'd2 && yy_last))
             wy_g = 8'd0;
     end
 end
