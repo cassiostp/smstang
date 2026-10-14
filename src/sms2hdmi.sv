@@ -194,7 +194,7 @@ wire [11:0] XSTOP  = (12'd1280 + XSIZE) >> 1;
 // addressed on the previous clock was the last column of its source pixel); row_s1 the
 // last-row flag for the address cycle. Both travel to rgb_pre in shift registers.
 localparam FX_LAT = 11;     // clocks from rgb_pre to rgb, see video_fx.v
-localparam SM_LAT = 10;     // the frame buffer lookup is followed by smooth.v (LAT 9) and the rgb_pre register
+localparam SM_LAT = 9;      // the frame buffer lookup is followed by smooth.v (LAT 8) and the rgb_pre register
 reg cnew = 1'b0;            // the frame buffer address is the first of a source column
 wire [10:0] xstep = gg_mode ? 11'd160 : 11'd256;   // source px per output px
 wire [10:0] ystep = overlay ? 11'd224 : gg_mode ? 11'd144 : 11'd192;
