@@ -200,6 +200,8 @@ module tb_frame_lock;
             end
             hw_first <= 0;
             prev_hw <= dut.audio_sample_word[0];
+        end else if (dut.clk_audio && !prev_ca) begin
+            hw_first <= 1'b1;   // masked/frozen tick: re-arm, resume is fresh
         end
         prev_ca <= dut.clk_audio;
     end
