@@ -224,10 +224,21 @@ always @(posedge clk_sys) begin
 end
 wire sms_pause_n = sms_pause_cnt == 0;
 wire pause_menu = core_config[17];    // freeze the system while the game menu is open
-wire ce_cpu_g = ce_cpu & ~pause_menu;
-wire ce_vdp_g = ce_vdp & ~pause_menu;
-wire ce_pix_g = ce_pix & ~pause_menu;
-wire ce_sp_g  = ce_sp  & ~pause_menu;
+// 0: native-rate HDMI (59.93 Hz for SMS/GG); 1: standard 60 Hz timing, for
+// displays that refuse the native rate (a menu option for it may come later)
+wire video_std_timing = 1'b0;
+`ifndef VERILATOR
+wire frame_halt_raw;                // from sms2hdmi: frame-lock halt, ORed with pause_menu
+`else
+wire frame_halt_raw = 1'b0;         // no sms2hdmi under Verilator: no frame lock
+`endif
+// PAL frames (313 lines) are longer than the HDMI frame, so the halt-lock
+// cannot hold them: run PAL free as before.
+wire frame_halt = frame_halt_raw & ~pal;
+wire ce_cpu_g = ce_cpu & ~pause_menu & ~frame_halt;
+wire ce_vdp_g = ce_vdp & ~pause_menu & ~frame_halt;
+wire ce_pix_g = ce_pix & ~pause_menu & ~frame_halt;
+wire ce_sp_g  = ce_sp  & ~pause_menu & ~frame_halt;
 system #(63) system
 (
 	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp_g),
@@ -380,9 +391,10 @@ wire [7:0] overlay_y;
 wire [14:0] overlay_color;
 
 sms2hdmi sms2hdmi_inst (
-	.clk(clk_sys), .resetn(1'b1),
+	.clk(clk_sys), .resetn(~reset),
 	.clk_pixel(clk_pixel),.clk_5x_pixel(clk_5x_pixel),
     .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
+    .frame_halt(frame_halt_raw), .std_timing(video_std_timing),
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
     .scanlines(core_config[16]), .sl_darkness(core_config[19:18]), .sl_thick(core_config[20]), .sl_out(core_config[21]),
     .video_config(video_config),

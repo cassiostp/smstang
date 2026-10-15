@@ -10,13 +10,20 @@ module hdmi #(
     parameter AUDIO_RATE = 48000,
     parameter AUDIO_BIT_WIDTH = 16,
     parameter START_X = 0,
-    parameter START_Y = 0
+    parameter START_Y = 0,
+    // Line length (htotal) of the 720p mode when std_timing is 0, picked so
+    // the HDMI frame rate matches the console's own refresh rate. Only
+    // frame_width changes; the active picture stays put.
+    parameter int NATIVE_FRAME_WIDTH = 1650
 ) (
     input         clk_pixel_x5,
     input         clk_pixel,
     input         clk_audio,
     input  [23:0] rgb,
     input         reset,
+    // 1: standard 1650-pixel 60.00 Hz timing; 0: native rate. Unconnected
+    // (z) in baselines built from history means standard timing.
+    input         std_timing,
     input  [15:0] audio_sample_word [1:0],
     output [2:0]  tmds,
     output        tmds_clock,
@@ -25,13 +32,13 @@ module hdmi #(
     output [10:0] frame_width,
     output [9:0]  frame_height
 );
-    assign frame_width = 1650;
+    assign frame_width = (std_timing === 1'b0) ? NATIVE_FRAME_WIDTH : 11'd1650;
     assign frame_height = 750;
     assign tmds = 3'b0;
     assign tmds_clock = 1'b0;
     always @(posedge clk_pixel) begin
-        cx <= (cx == 11'd1649) ? 11'd0 : cx + 11'd1;
-        if (cx == 11'd1649)
+        cx <= (cx == frame_width - 11'd1) ? 11'd0 : cx + 11'd1;
+        if (cx == frame_width - 11'd1)
             cy <= (cy == 10'd749) ? 10'd0 : cy + 10'd1;
     end
 endmodule

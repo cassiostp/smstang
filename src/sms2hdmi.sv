@@ -28,6 +28,13 @@ module sms2hdmi (
 	input clk_pixel,
 	input clk_5x_pixel,
 
+    // frame lock: halt request for the SMS (clk domain), see below
+    output frame_halt,
+
+    // 1: standard 1650-pixel 60.00 Hz HDMI timing; 0: native rate (the top
+    // level ties this off; a menu option for it may come later)
+    input std_timing,
+
 	// output signals
 	output       tmds_clk_n,
 	output       tmds_clk_p,
@@ -83,6 +90,58 @@ always @(posedge clk) begin
         mem_portA_we <= 1'b1;
     end
 end
+
+// Frame lock: halt the SMS once per frame so the VDP frame stays ahead of
+// the HDMI read and the single framebuffer never tears.
+//
+// The NTSC SMS frame (59.9345 Hz from the board PLLs, 262 lines of 3420
+// system clocks) is shorter than the native-rate 720p HDMI frame
+// (59.9274 Hz with NATIVE_FRAME_WIDTH 1652). Halting the whole machine for
+// the difference (about 2 us) once per frame locks the SMS to exactly the
+// HDMI rate, 0.008 % fast, with a fixed phase.
+//
+// Phase: the SMS waits at the first vblank line (y 192, all of lines 0-191
+// are written by then) and runs again when HDMI reaches RELEASE_ROW. The
+// VDP then leads the HDMI read by 2.6-3.3 ms on every visible line. The
+// release is edge-triggered (one toggle per HDMI frame over a
+// synchroniser) so a late arrival waits for the next frame and the phase is
+// exact every frame after at most two frames, including after reset, game
+// reload and menu pause. PAL frames (313 lines) are longer than the HDMI
+// frame, so the top level ignores the halt in PAL mode and PAL runs free
+// as before.
+localparam HALT_LINE = 192;         // VDP line at which to wait
+localparam RELEASE_ROW = 500;       // HDMI row whose start releases the SMS
+
+// HDMI side: one toggle per frame as cy passes RELEASE_ROW
+reg at_rel_q = 1'b0;
+reg rel_tgl = 1'b0;
+always @(posedge clk_pixel) begin
+    at_rel_q <= (cy == RELEASE_ROW);
+    if ((cy == RELEASE_ROW) && !at_rel_q)
+        rel_tgl <= ~rel_tgl;
+end
+
+// SMS side: synchronise the toggle, then wait/release
+reg [2:0] rel_sync = 3'b0;
+reg rel_lvl_q = 1'b0;
+wire rel_pulse = rel_sync[2] ^ rel_lvl_q;   // one clk per HDMI frame
+reg halt_req = 1'b0;
+reg was_halt_line = 1'b0;
+always @(posedge clk) begin
+    rel_sync <= {rel_sync[1:0], rel_tgl};
+    rel_lvl_q <= rel_sync[2];
+    was_halt_line <= (y == HALT_LINE);
+    if (!resetn) begin
+        rel_sync <= 3'b0;
+        rel_lvl_q <= 1'b0;
+        halt_req <= 1'b0;
+        was_halt_line <= 1'b0;
+    end else if (rel_pulse && halt_req)
+        halt_req <= 1'b0;                       // HDMI at the release row: run
+    else if ((y == HALT_LINE) && !was_halt_line)
+        halt_req <= 1'b1;                       // line 191 written: wait
+end
+assign frame_halt = halt_req;
 
 // audio stuff
 localparam AUDIO_RATE=48000;
@@ -392,6 +451,9 @@ logic[2:0] tmds;
 localparam VIDEOID = 4;
 localparam VIDEO_REFRESH = 60.0;
 
+// SMS/Genesis native rate: 59.9274 Hz at 1652 pixels per line (+0.008 %).
+localparam NATIVE_WIDTH = 1652;
+
 hdmi #( .VIDEO_ID_CODE(VIDEOID), 
         .DVI_OUTPUT(0), 
         .VIDEO_REFRESH_RATE(VIDEO_REFRESH),
@@ -399,13 +461,15 @@ hdmi #( .VIDEO_ID_CODE(VIDEOID),
         .AUDIO_RATE(AUDIO_RATE), 
         .AUDIO_BIT_WIDTH(AUDIO_BIT_WIDTH),
         .START_X(0),
-        .START_Y(0) )
+        .START_Y(0),
+        .NATIVE_FRAME_WIDTH(NATIVE_WIDTH) )
 
 hdmi( .clk_pixel_x5(clk_5x_pixel), 
         .clk_pixel(clk_pixel), 
         .clk_audio(clk_audio),
-        .rgb(rgb), 
         .reset( 0 ),
+        .std_timing(std_timing),
+        .rgb(rgb), 
         .audio_sample_word(audio_sample_word),
         .tmds(tmds), 
         .tmds_clock(tmdsClk), 
