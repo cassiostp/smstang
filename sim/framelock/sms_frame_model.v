@@ -1,0 +1,84 @@
+// Cycle-exact model of the SMS frame timing for the frame-lock sims: the
+// clock-enable divider in src/smstang_top.sv:109-135 and the NTSC 192-line
+// hcount/vcount counters in src/video.v (hcount 0-295,466-511 = 342
+// ce_pix steps per line; vcount 0-218,469-511 = 262 lines per frame). The
+// enables are gated by pause_eff exactly as the top level gates them with
+// pause_menu/frame_halt (PAL and the 224/240-line modes are not modelled:
+// the lock only claims NTSC 192-line timing). Shared by the iverilog bench
+// (tb_frame_lock.v) and the Verilator top (fl_top.sv) so both engines drive
+// the real sms2hdmi with the same stimulus.
+module sms_frame_model (
+    input clk,
+    input pause_eff,            // pause_tb | DUT frame_halt
+    output reg ce_cpu,
+    output reg ce_vdp,
+    output reg ce_pix,
+    output reg ce_sp,
+    output [8:0] x,             // = hcount, as video.v drives it
+    output [8:0] y,             // = vcount
+    output reg [15:0] audio_l = 0,  // 440 Hz sine stepped at the gated cpu rate
+    output reg [15:0] audio_r = 0
+);
+
+    // exact copy of the ce divider in src/smstang_top.sv (free running)
+    reg [4:0] clkd = 0;
+    always @(posedge clk) begin
+        ce_sp <= clkd[0];
+        ce_vdp <= 0;
+        ce_pix <= 0;
+        ce_cpu <= 0;
+        clkd <= clkd + 1'd1;
+        if (clkd == 29) begin
+            clkd <= 0;
+            ce_vdp <= 1;
+            ce_pix <= 1;
+        end else if (clkd == 24) begin
+            ce_cpu <= 1;
+            ce_vdp <= 1;
+        end else if (clkd == 19) begin
+            ce_vdp <= 1;
+            ce_pix <= 1;
+        end else if (clkd == 14) begin
+            ce_vdp <= 1;
+        end else if (clkd == 9) begin
+            ce_cpu <= 1;
+            ce_vdp <= 1;
+            ce_pix <= 1;
+        end else if (clkd == 4) begin
+            ce_vdp <= 1;
+        end
+    end
+
+    wire ce_cpu_g = ce_cpu & ~pause_eff;
+    wire ce_pix_g = ce_pix & ~pause_eff;
+
+    // exact copy of the NTSC counters in src/video.v (192-line mode)
+    reg [8:0] hcount = 0;
+    reg [8:0] vcount = 0;
+    always @(posedge clk) begin
+        if (ce_pix_g) begin
+            if (hcount == 487) begin
+                vcount <= vcount + 1;
+                if (vcount == 218)
+                    vcount <= 469;
+            end
+            hcount <= hcount + 1;
+            if (hcount == 295)
+                hcount <= 466;
+        end
+    end
+    assign x = hcount;
+    assign y = vcount;
+
+    // synthetic audio: full-scale 440 Hz sine stepped at the gated cpu rate
+    // (3.5802 MHz), so a frame halt holds the sample exactly as the PSG does
+    reg [15:0] phase_acc = 0;
+    always @(posedge clk) begin
+        if (ce_cpu_g) begin
+            phase_acc <= phase_acc + 16'd8;
+            audio_l <= $rtoi(32767.0 * $sin(6.2831853 * phase_acc / 65536.0));
+            audio_r <= $rtoi(32767.0 * $sin(6.2831853 * phase_acc / 65536.0));
+        end
+    end
+
+endmodule

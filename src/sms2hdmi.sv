@@ -102,7 +102,8 @@ end
 //
 // Phase: the SMS waits at the first vblank line (y 192, all of lines 0-191
 // are written by then) and runs again when HDMI reaches RELEASE_ROW. The
-// VDP then leads the HDMI read by 2.6-3.3 ms on every visible line. The
+// VDP then leads the HDMI read on every visible line (about 1.8 ms at the
+// tightest, the top Game Gear line; 3.3 ms or more across the SMS picture). The
 // release is edge-triggered (one toggle per HDMI frame over a
 // synchroniser) so a late arrival waits for the next frame and the phase is
 // exact every frame after at most two frames, including after reset, game
@@ -110,7 +111,7 @@ end
 // frame, so the top level ignores the halt in PAL mode and PAL runs free
 // as before.
 localparam HALT_LINE = 192;         // VDP line at which to wait
-localparam RELEASE_ROW = 500;       // HDMI row whose start releases the SMS
+localparam RELEASE_ROW = 400;       // HDMI row whose start releases the SMS
 
 // HDMI side: one toggle per frame as cy passes RELEASE_ROW
 reg at_rel_q = 1'b0;

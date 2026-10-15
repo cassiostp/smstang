@@ -1,0 +1,226 @@
+// Verilator harness for the SMS frame-lock soak: exact-rate clocks (double
+// fs scheduling, no drift), the scenario (power-on, menu pause, game-reload
+// reset, second pause over ~400 NTSC frames) and the checks. Mirrors
+// tb_frame_lock.v; this is the engine that makes 400+ frames affordable.
+//
+// Exact rates: clk_sys 50*29/27 MHz, clk_pixel 74.25 MHz. Time is counted in
+// sys-clock edges for waits/ages (theory: steady wait 106.6 sys, HDMI frame
+// 896146.6 sys) and checked against integer bands, so the verdict does not
+// depend on the time base.
+// Prints tb_frame_lock: PASS on success (and returns nonzero otherwise).
+#include <cstdio>
+#include <cstdint>
+#include <string>
+#include <cmath>
+#include "Vfl_top.h"
+#include "verilated.h"
+
+static const int64_t WAIT_LO = 80;       // steady waits stay in 80..140 sys
+static const int64_t WAIT_HI = 140;
+static const int64_t RATE_LO = 896140;   // sys edges per HDMI frame
+static const int64_t RATE_HI = 896153;
+static const int64_t AGE_MAX = 550000;   // reads must be this VDP frame's data
+                                             // (stale = 896k+; GG's oldest line ~463k)
+static const int64_t AGE_MIN = 30000;    // ... with margin (theory ~57k..259k)
+static const int AUDIO_MAX_STEP = 4200;  // 440 Hz sine: ~1890/48 kHz step
+static const int AUDIO_MAX_REPEAT = 6;
+
+int main(int argc, char **argv) {
+    if (argc != 2) { fprintf(stderr, "usage: %s tag\n", argv[0]); return 2; }
+    std::string tag = argv[1];
+    Verilated::commandArgs(argc, argv);
+    Vfl_top *t = new Vfl_top;
+    FILE *log = fopen(("tb_" + tag + ".log").c_str(), "w");
+    FILE *af = fopen(("audio_hdmi_" + tag + ".hex").c_str(), "w");
+#define LOG(...) do { fprintf(log, __VA_ARGS__); fputc('\n', log); } while (0)
+
+    const double P_SYS_FS = 1e15 * 27.0 / (50.0e6 * 29.0);   // 53.7037 MHz
+    const double P_PIX_FS = 1e15 / 74.25e6;
+    int64_t k_sys = 0, k_pix = 0;
+    int64_t next_sys = (int64_t)llround(P_SYS_FS);
+    int64_t next_pix = (int64_t)llround(P_PIX_FS);
+    int64_t now = 0, sys_edge = 0;
+    auto eval = [&]() { t->eval(); };
+
+    int64_t wr_last[192], wr_prev[192];
+    for (int i = 0; i < 192; i++) wr_last[i] = wr_prev[i] = 0;
+
+    // scenario, counted in VDP frames (y==192 entries with the model running)
+    int phase = 0;   // 0 run-in, 1 pause1, 2 run, 3 reset, 4 run, 5 pause2, 6 run, 7 done
+    int frames_in_phase = 0;
+    int64_t frozen_until = 0;
+    bool por_n = false, pause_tb = false;
+    bool prev192 = false;
+
+    int locked = 0, forgive = 1, settled = 0;
+    int violations = 0;
+    int halt_entered = 0, released = 0, hdmi_frames = 0, frame_idx = 0, vdp_frames = 0;
+    int64_t t_enter = 0, last_wait = 0;
+    int64_t frame_min_age = INT64_MAX, frame_max_age = 0;
+    int64_t run_min_age = INT64_MAX, run_max_age = 0, run_min_wait = INT64_MAX, run_max_wait = 0;
+    int64_t frame_sys0 = 0;
+    int halt_q = 0, prev_por = 0, prev_pause = 0;
+    int rd_q = -1;
+    int cy_q = -1;
+    int prev_hw = 0, max_hdmi_step = 0, max_repeat = 0, cur_repeat = 0;
+    bool hw_first = true;
+    int prev_ca = 0;
+    int64_t mask_until = 0;
+    const int64_t E_CAP = (int64_t)420e6;    // sys-edge cap (~7 s game time)
+
+    t->clk = 0; t->clk_pixel = 0;
+    t->por_n = 0; t->pause_tb = 0;
+    eval();
+
+    while (sys_edge < E_CAP) {
+        bool is_sys = next_sys <= next_pix;
+        now = is_sys ? next_sys : next_pix;
+        if (is_sys) { next_sys = (int64_t)llround((double)++k_sys * P_SYS_FS + P_SYS_FS); }
+        else { next_pix = (int64_t)llround((double)++k_pix * P_PIX_FS + P_PIX_FS); }
+        if (is_sys) { t->clk = !t->clk; eval(); } else { t->clk_pixel = !t->clk_pixel; eval(); }
+        bool rising_sys = is_sys && t->clk;
+        bool rising_pix = !is_sys && t->clk_pixel;
+        if (rising_sys) sys_edge++;
+
+        if (rising_sys) {
+            if (phase == 0 && !por_n && sys_edge > 50) { por_n = true; }
+            bool is192 = (t->y == 192);
+            if (is192 && !prev192 && !pause_tb && por_n) {
+                frames_in_phase++;
+                vdp_frames++;
+                if ((phase == 0 && frames_in_phase >= 60) ||
+                    (phase == 2 && frames_in_phase >= 120) ||
+                    (phase == 4 && frames_in_phase >= 120) ||
+                    (phase == 6 && frames_in_phase >= 100)) {
+                    frames_in_phase = 0;
+                    phase++;
+                    if (phase == 1 || phase == 5) { pause_tb = true; LOG("scenario: menu pause on at sys %lld", (long long)sys_edge); }
+                    if (phase == 3) { por_n = false; LOG("scenario: game reload at sys %lld", (long long)sys_edge); }
+                    if (phase == 7) break;
+                }
+            }
+            prev192 = is192;
+            if ((phase == 1 || phase == 5) && frozen_until == 0)
+                frozen_until = sys_edge + (phase == 1 ? (int64_t)27e6 : (int64_t)9e6);
+            if (phase == 3 && frozen_until == 0) frozen_until = sys_edge + 54;
+        }
+        if (frozen_until && sys_edge >= frozen_until) {
+            frozen_until = 0;
+            if (phase == 1 || phase == 5) { pause_tb = false; LOG("scenario: menu pause off at sys %lld", (long long)sys_edge); phase++; }
+            else if (phase == 3) { por_n = true; phase++; }
+        }
+        t->por_n = por_n; t->pause_tb = pause_tb;
+
+        if (rising_sys) {
+            if (pause_tb || !por_n) locked = 0;
+            if ((prev_por != por_n) || (prev_pause != pause_tb)) {
+                forgive = 2;   // the re-lock can pass through two
+                               // transitional waits (a reset that lands on
+                               // a halt entry truncates that halt and
+                               // leaves the next wait arbitrary too)
+                settled = 0;   // re-lock grace for the age checks
+                mask_until = sys_edge + 3 * 896150;
+            }
+            prev_por = por_n; prev_pause = pause_tb;
+            int halt = t->frame_halt;
+            if (halt && !halt_q) {
+                t_enter = sys_edge; halt_entered++;
+                if (halt_entered <= 6 || (halt_entered % 100) == 0)
+                    LOG("halt #%d enter at sys %lld (y=%d cy=%d)", halt_entered, (long long)t_enter, (int)t->y, (int)t->cy);
+            }
+            if (!halt && halt_q) {
+                last_wait = sys_edge - t_enter; released++;
+                if (last_wait < run_min_wait) run_min_wait = last_wait;
+                if (last_wait > run_max_wait) run_max_wait = last_wait;
+                if (halt_entered <= 6 || (released % 100) == 0)
+                    LOG("halt #%d release wait=%lld sys (cy=%d)", halt_entered, (long long)last_wait, (int)t->cy);
+                if (!pause_tb && por_n) {
+                    // transitional waits (one full-frame slip after an
+                    // event, plus the reset-on-halt-entry race, which
+                    // truncates one halt and leaves the next arbitrary)
+                    // are forgiven; anything else must be the rate
+                    // difference, ~107 sys clocks
+                    if (last_wait >= WAIT_LO && last_wait <= WAIT_HI) {
+                        locked = 1;
+                        forgive = 0;
+                    } else if (forgive > 0) {
+                        forgive--;
+                        locked = 1;
+                    } else {
+                        LOG("FAIL: wait %lld sys (frame %d)", (long long)last_wait, frame_idx);
+                        violations++;
+                    }
+                }
+            }
+            halt_q = halt;
+            if (t->memA_we) {
+                int ln = (t->memA_addr >> 8) & 0xffff;
+                if (ln >= 0 && ln < 192) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; }
+            }
+        }
+
+        if (rising_pix) {
+            int cy = t->cy;
+            if (cy == 0 && cy_q != 0 && cy_q >= 0) {
+                int64_t len = frame_sys0 ? sys_edge - frame_sys0 : 0;
+                frame_sys0 = sys_edge;
+                if (frame_sys0 && por_n && len) {
+                    if (len < RATE_LO || len > RATE_HI) { LOG("FAIL: hdmi frame %d len %lld sys", frame_idx, (long long)len); violations++; }
+                    if (locked) {
+                        if (frame_idx % 50 == 0 || frame_max_age > AGE_MAX || frame_min_age < AGE_MIN)
+                            LOG("hdmi frame %d: min_age=%lld max_age=%lld wait=%lld", frame_idx, (long long)frame_min_age, (long long)frame_max_age, (long long)last_wait);
+                        // settled>3: the phase is exact again at most two
+                        // frames after any event (startup, pause-off, reload)
+                        if (settled > 3 && frame_max_age > AGE_MAX) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
+                        if (settled > 3 && frame_min_age < AGE_MIN) { LOG("FAIL: min age %lld sys in frame %d", (long long)frame_min_age, frame_idx); violations++; }
+                        settled++;
+                        if (frame_max_age > run_max_age) run_max_age = frame_max_age;
+                        if (frame_min_age < run_min_age) run_min_age = frame_min_age;
+                    }
+                }
+                frame_idx++;
+                hdmi_frames++;
+                frame_min_age = INT64_MAX;
+                frame_max_age = 0;
+            }
+            cy_q = cy;
+            int rd = (t->memB_addr >> 8) & 0xffff;
+            if (rd != rd_q) {
+                rd_q = rd;
+                if (rd >= 0 && rd < 192 && locked && wr_last[rd]) {
+                    int64_t age = sys_edge - wr_last[rd];
+                    if (age < 0) age = sys_edge - wr_prev[rd];
+                    if (age < frame_min_age) frame_min_age = age;
+                    if (age > frame_max_age) frame_max_age = age;
+                }
+            }
+            int ca = t->clk_audio;
+            if (ca && !prev_ca && por_n && !pause_tb && sys_edge > mask_until) {
+                int w0 = (int)(int16_t)t->audio_word0;
+                fprintf(af, "%d\n", w0);
+                if (!hw_first) {
+                    int d = prev_hw >= w0 ? prev_hw - w0 : w0 - prev_hw;
+                    if (d > max_hdmi_step) max_hdmi_step = d;
+                    if (d == 0) { cur_repeat++; if (cur_repeat > max_repeat) max_repeat = cur_repeat; }
+                    else cur_repeat = 0;
+                    if (d > AUDIO_MAX_STEP) { LOG("FAIL: audio step %d", d); violations++; }
+                    if (cur_repeat > AUDIO_MAX_REPEAT) { LOG("FAIL: audio repeat run %d", cur_repeat); violations++; }
+                }
+                hw_first = false; prev_hw = w0;
+            } else if (ca && !prev_ca) {
+                hw_first = true;   // masked/frozen: re-arm, resume is a fresh start
+            }
+            prev_ca = ca;
+        }
+    }
+
+    LOG("done: halted=%d released=%d hdmi=%d vdp=%d violations=%d", halt_entered, released, hdmi_frames, vdp_frames, violations);
+    LOG("audio: max_hdmi_step=%d (bound %d) max_repeat=%d", max_hdmi_step, AUDIO_MAX_STEP, max_repeat);
+    LOG("wait sys: min=%lld max=%lld (steady theory 106.6)", (long long)run_min_wait, (long long)run_max_wait);
+    LOG("age sys: min=%lld max=%lld", (long long)run_min_age, (long long)run_max_age);
+    if (violations != 0) { LOG("tb_frame_lock: FAIL"); fclose(log); fclose(af); return 1; }
+    if (released < 350) { LOG("tb_frame_lock: FAIL: too few frames"); fclose(log); fclose(af); return 1; }
+    LOG("tb_frame_lock: PASS");
+    fclose(log); fclose(af);
+    return 0;
+}
