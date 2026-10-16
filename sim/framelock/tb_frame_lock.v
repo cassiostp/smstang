@@ -24,7 +24,7 @@ module tb_frame_lock;
     wire [15:0] audio_l, audio_r;
 
     sms_frame_model model (
-        .clk(clk), .pause_eff(pause_eff),
+        .clk(clk), .pause_eff(pause_eff), .mode_m1(1'b0), .mode_m3(1'b0),
         .ce_cpu(), .ce_vdp(), .ce_pix(model_ce), .ce_sp(),
         .x(x), .y(y), .audio_l(audio_l), .audio_r(audio_r)
     );

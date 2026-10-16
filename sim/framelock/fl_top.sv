@@ -12,6 +12,10 @@ module fl_top (
     input clk_pixel,
     input por_n,            // DUT resetn: power-on plus game-reload pulses
     input pause_tb,         // core_config[17] equivalent (menu pause)
+    input gg_in,            // 1: Game Gear mode (160x144 window)
+    input mode_m1,          // 1: 224-line mode (counter model only; sms2hdmi has no mode input)
+    input mode_m3,          // 1: 240-line mode (counter model only)
+    input [1:0] sm_mode,    // video_config[19:18]: 0 off, 1 sharp, 2 soft
     output frame_halt,
     output [8:0] x,
     output [8:0] y,
@@ -28,7 +32,7 @@ module fl_top (
     wire [15:0] audio_l, audio_r;
 
     sms_frame_model model (
-        .clk(clk), .pause_eff(pause_eff),
+        .clk(clk), .pause_eff(pause_eff), .mode_m1(mode_m1), .mode_m3(mode_m3),
         .ce_cpu(ce_cpu), .ce_vdp(ce_vdp), .ce_pix(ce_pix), .ce_sp(ce_sp),
         .x(x), .y(y), .audio_l(audio_l), .audio_r(audio_r)
     );
@@ -48,7 +52,7 @@ module fl_top (
         .overlay(1'b0), .overlay_x(overlay_x), .overlay_y(overlay_y),
         .overlay_color(15'd0),
         .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0), .sl_out(1'b0),
-        .video_config(32'd0), .gg(1'b0),
+        .video_config({12'b0, sm_mode, 18'b0}), .gg(gg_in),
         .frame_halt(frame_halt), .std_timing(1'b0),
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p),

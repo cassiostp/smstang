@@ -100,8 +100,12 @@ end
 // the difference (about 2 us) once per frame locks the SMS to exactly the
 // HDMI rate, 0.008 % fast, with a fixed phase.
 //
-// Phase: the SMS waits at the first vblank line (y 192, all of lines 0-191
-// are written by then) and runs again when HDMI reaches RELEASE_ROW. The
+// Phase: the SMS waits at y 192 (the first vblank line in 192-line mode.
+// In the 224/240-line modes y 192 is inside the generated picture, but the
+// frame buffer stores only lines 0-191, so everything displayed is written
+// by then in every mode; all three NTSC modes are 262-line frames and the
+// read ages are identical, see sim/framelock) and runs again when HDMI
+// reaches RELEASE_ROW. The
 // VDP then leads the HDMI read on every visible line (about 1.8 ms at the
 // tightest, the top Game Gear line; 3.3 ms or more across the SMS picture). The
 // release is edge-triggered (one toggle per HDMI frame over a

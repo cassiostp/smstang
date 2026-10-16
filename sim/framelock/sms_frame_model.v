@@ -1,15 +1,19 @@
 // Cycle-exact model of the SMS frame timing for the frame-lock sims: the
-// clock-enable divider in src/smstang_top.sv:109-135 and the NTSC 192-line
+// clock-enable divider in src/smstang_top.sv:109-135 and the NTSC
 // hcount/vcount counters in src/video.v (hcount 0-295,466-511 = 342
-// ce_pix steps per line; vcount 0-218,469-511 = 262 lines per frame). The
+// ce_pix steps per line; vcount 0-218,469-511 = 262 lines per frame in
+// 192-line mode; the 224-line (mode_m1: 0-234,485-511) and 240-line
+// (mode_m3: 0-261) branches of src/video.v are also 262 lines). The
 // enables are gated by pause_eff exactly as the top level gates them with
-// pause_menu/frame_halt (PAL and the 224/240-line modes are not modelled:
-// the lock only claims NTSC 192-line timing). Shared by the iverilog bench
+// pause_menu/frame_halt (PAL is not modelled: the top level gates the
+// halt off in PAL and PAL runs free). Shared by the iverilog bench
 // (tb_frame_lock.v) and the Verilator top (fl_top.sv) so both engines drive
 // the real sms2hdmi with the same stimulus.
 module sms_frame_model (
     input clk,
     input pause_eff,            // pause_tb | DUT frame_halt
+    input mode_m1,              // 224-line mode (smode_M1 in src/video.v)
+    input mode_m3,              // 240-line mode (smode_M3 in src/video.v)
     output reg ce_cpu,
     output reg ce_vdp,
     output reg ce_pix,
@@ -52,14 +56,21 @@ module sms_frame_model (
     wire ce_cpu_g = ce_cpu & ~pause_eff;
     wire ce_pix_g = ce_pix & ~pause_eff;
 
-    // exact copy of the NTSC counters in src/video.v (192-line mode)
+    // exact copy of the NTSC counters in src/video.v (all three line modes;
+    // vsync is not modelled, as before)
     reg [8:0] hcount = 0;
     reg [8:0] vcount = 0;
     always @(posedge clk) begin
         if (ce_pix_g) begin
             if (hcount == 487) begin
                 vcount <= vcount + 1;
-                if (vcount == 218)
+                if (mode_m1) begin
+                    if (vcount == 234)
+                        vcount <= 485;
+                end else if (mode_m3) begin
+                    if (vcount == 261)
+                        vcount <= 0;
+                end else if (vcount == 218)
                     vcount <= 469;
             end
             hcount <= hcount + 1;
