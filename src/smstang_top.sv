@@ -226,7 +226,7 @@ wire sms_pause_n = sms_pause_cnt == 0;
 wire pause_menu = core_config[17];    // freeze the system while the game menu is open
 // 0: native-rate HDMI (59.93 Hz for SMS/GG); 1: standard 60 Hz timing, for
 // displays that refuse the native rate (a menu option for it may come later)
-wire video_std_timing = 1'b0;
+wire video_std_timing = 1'b1;
 `ifndef VERILATOR
 wire frame_halt_raw;                // from sms2hdmi: frame-lock halt, ORed with pause_menu
 `else
