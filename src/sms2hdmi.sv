@@ -101,11 +101,11 @@ end
 // dimmed) frame, so the lock releases the SMS once per two HDMI frames.
 //
 // The NTSC SMS frame (59.9345 Hz at 53.7037 MHz, 262 lines of 3420 system
-// clocks; 60.0946 Hz at the 120 Hz build's 53.8462 MHz sys clock) is
-// shorter than two native-rate 480p120 HDMI frames (119.8830 Hz at
+// clocks; 60.0935 Hz at the 120 Hz build's 53.8462 MHz sys clock) is
+// shorter than two native-rate 480p120 HDMI frames (119.8801 Hz at
 // 54 MHz with 858-pixel lines, the standard 480p120 line). Halting the
 // whole machine for the difference (about 42 us) once per game frame locks
-// the SMS to exactly half the HDMI rate, 59.9415 Hz (+0.031 % vs the
+// the SMS to exactly half the HDMI rate, 59.9401 Hz (+0.029 % vs the
 // original console, never slower), with a fixed phase. The sys clock bump
 // (53.7037 to 53.8462 MHz) is needed because no integer line at 54 MHz
 // locks the stock clock: 858 would run the game faster than the machine
@@ -117,8 +117,9 @@ end
 // by then in every mode; all three NTSC modes are 262-line frames and the
 // read ages are identical, see sim/framelock) and runs again when HDMI
 // reaches RELEASE_ROW in a lit frame. The
-// VDP then leads the HDMI read on every visible line (about 1.7 ms at the
-// tightest, SMS line 0; more further down, see sim/framelock). The
+// VDP then leads the HDMI read on every visible line (about 0.5 ms at the
+// tightest, the last SMS line 191; sim min age 27717 sys. Line 0 leads by
+// ~6.6 ms). The
 // release is edge-triggered (one toggle per two HDMI frames over a
 // synchroniser) so a late arrival waits for the next pair and the phase is
 // exact every frame after at most two frames, including after reset, game
@@ -517,7 +518,7 @@ logic[2:0] tmds;
 localparam VIDEOID = 48;            // 480p120: VIC 2/3 totals at 54 MHz, for BFI
 localparam VIDEO_REFRESH = 120.0;   // the audio clock regeneration only: the line is NATIVE below
 
-// SMS native rate x2: 119.8830 Hz at 858 pixels per line (game 59.9415 Hz),
+// SMS native rate x2: 119.8801 Hz at 858 pixels per line (game 59.9401 Hz),
 // the standard 480p120 line (858x525); the stock sys clock cannot lock it,
 // so the 120 Hz build bumps the sys PLL (see smstang_top.sv).
 localparam NATIVE_WIDTH = 858;
