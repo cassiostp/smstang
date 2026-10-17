@@ -7,7 +7,7 @@
 #                   (iverilog, scanlines on)
 #   fl_top          the same DUT and model over ~400 frames with pauses and a
 #                   reset (Verilator, scanlines off), plus short soaks in the
-#                   224-line, 240-line and Game Gear (soft smoothing) modes
+#                   224-line, 240-line and Game Gear modes
 # Afterwards (host): python3 sim/framelock/check_audio.py sim/framelock/build
 set -e
 cd "$(dirname "$0")"
@@ -20,8 +20,8 @@ VLT="docker run --rm --name nativerate_sms_vlt --user $(id -u):$(id -g) -v $PWD:
 VSRC=/r/src
 VSCN=/r/sim/scanlines
 
-$IV sh -c "iverilog -g2012 -o build_pos.out tb_native_pos.v $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v $RTL/smooth.v && vvp build_pos.out"
-$IV sh -c "iverilog -g2012 -o build_lock.out tb_frame_lock.v sms_frame_model.v $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v $RTL/smooth.v && vvp build_lock.out"
+$IV sh -c "iverilog -g2012 -o build_pos.out tb_native_pos.v $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v && vvp build_pos.out"
+$IV sh -c "iverilog -g2012 -o build_lock.out tb_frame_lock.v sms_frame_model.v $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v && vvp build_lock.out"
 
 mkdir -p build
 # the real hdmi.sv counting in both modes (DVI: same counters, no audio
@@ -37,7 +37,7 @@ grep -q "tb_hdmi_native: PASS" build/hdminat.log
 
 $VLT --cc --top-module fl_top --prefix Vfl_top -Mdir build/obj -CFLAGS "-O2" \
   -Wno-PINMISSING -Wno-IMPLICIT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-CASEINCOMPLETE -Wno-UNUSEDSIGNAL -Wno-UNDRIVEN \
-  /w/fl_top.sv /w/sms_frame_model.v $VSRC/sms2hdmi.sv $VSCN/hdmi_stub.v $VSRC/scanlines.v $VSRC/video_fx.v $VSRC/smooth.v \
+  /w/fl_top.sv /w/sms_frame_model.v $VSRC/sms2hdmi.sv $VSCN/hdmi_stub.v $VSRC/scanlines.v $VSRC/video_fx.v \
   --exe /w/tb_frame_lock.cpp > build/verilate.log 2>&1 || { cat build/verilate.log; exit 1; }
 if grep -E "fl_top|tb_frame_lock|sms_frame_model" build/verilate.log; then echo "new warnings in sim files:"; cat build/verilate.log; exit 1; fi
 docker run --rm --name nativerate_sms_make --user "$(id -u):$(id -g)" -v "$PWD:/w" -v "$ROOT:/r" -w /w --entrypoint make verilator/verilator:latest \

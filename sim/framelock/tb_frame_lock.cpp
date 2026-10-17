@@ -4,8 +4,7 @@
 // tb_frame_lock.v; this is the engine that makes 400+ frames affordable.
 // Configs (argv[2]): sms (192-line, default), sms224, sms240 (the VDP's
 // 224/240-line counter branches; sms2hdmi still stores only lines 0-191),
-// gg (Game Gear window, soft smoothing so the neighbour-line reads count
-// in the read ages). Optional argv[3] "short" quarters the scenario.
+// gg (Game Gear window). Optional argv[3] "short" quarters the scenario.
 //
 // Exact rates: clk_sys 50*29/27 MHz, clk_pixel 74.25 MHz. Time is counted in
 // sys-clock edges for waits/ages (theory: steady wait 106.6 sys, HDMI frame
@@ -34,11 +33,11 @@ int main(int argc, char **argv) {
     std::string tag = argv[1];
     std::string cfg = argc >= 3 ? argv[2] : "sms";
     bool short_scn = argc >= 4 && std::string(argv[3]) == "short";
-    int gg_in = 0, mode_m1 = 0, mode_m3 = 0, sm_mode = 0;
+    int gg_in = 0, mode_m1 = 0, mode_m3 = 0;
     int active_lines = 192;   // VDP active lines (vbl_st in src/video.v)
     if (cfg == "sms224") { mode_m1 = 1; active_lines = 224; }
     else if (cfg == "sms240") { mode_m3 = 1; active_lines = 240; }
-    else if (cfg == "gg") { gg_in = 1; sm_mode = 2; active_lines = 168; }
+    else if (cfg == "gg") { gg_in = 1; active_lines = 168; }
     else if (cfg != "sms") { fprintf(stderr, "unknown config %s\n", cfg.c_str()); return 2; }
     // scenario lengths in VDP frames (run-in, run, run, run)
     const int LEN0 = short_scn ? 15 : 60, LEN2 = short_scn ? 30 : 120;
@@ -86,10 +85,10 @@ int main(int argc, char **argv) {
 
     t->clk = 0; t->clk_pixel = 0;
     t->por_n = 0; t->pause_tb = 0;
-    t->gg_in = gg_in; t->mode_m1 = mode_m1; t->mode_m3 = mode_m3; t->sm_mode = sm_mode;
+    t->gg_in = gg_in; t->mode_m1 = mode_m1; t->mode_m3 = mode_m3;
     eval();
-    LOG("config %s: gg=%d m1=%d m3=%d sm=%d, VDP active lines %d, halt at y=192 (%s)",
-        cfg.c_str(), gg_in, mode_m1, mode_m3, sm_mode, active_lines,
+    LOG("config %s: gg=%d m1=%d m3=%d, VDP active lines %d, halt at y=192 (%s)",
+        cfg.c_str(), gg_in, mode_m1, mode_m3, active_lines,
         active_lines <= 192 ? "in vblank" : "inside the active picture");
 
     while (sys_edge < E_CAP) {

@@ -6,7 +6,7 @@
 #   build/sms2hdmi_fx.sv  the scaler with video_fx and without smoothing ($FXBASE), as sms2hdmi_fx
 set -e
 cd "$(dirname "$0")"
-BASE=${BASE:-feature/cosim}     # the last commit without video_fx
+BASE=${BASE:-385bd92}         # the last commit without video_fx
 FXBASE=${FXBASE:-9862515}       # the last commit without smoothing
 python3 -I model.py selfcheck
 python3 -I model.py gen
