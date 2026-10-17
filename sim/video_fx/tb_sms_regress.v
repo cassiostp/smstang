@@ -4,6 +4,8 @@
 // System and Game Gear mode, with the menu overlay up or not. The words tried: 0, what the
 // firmware sends with every filter off (the strengths at 1), and in SMS mode one with the LCD
 // grid bit set, which the SMS ignores (in GG mode the grid bit is live, so it is not tried).
+// The scanlines-off cases use full scale (out = 1): with integer scale the picture no longer
+// matches the baseline, which predates the integer geometry with scanlines off.
 // The frame buffer holds a pseudo-random picture and the overlay is a pattern read through the
 // overlay_x / overlay_y outputs with a two clock latency, so a picture or overlay that lands on
 // other pixels is caught. Settings change in the blanking, then two whole frames are compared.
@@ -118,9 +120,9 @@ module tb_sms_regress;
         // the first frame runs the pipelines empty; the settings are applied in its blanking
         wait_row730;
         // Master System mode (the grid bit is ignored here)
-        variant(0, 0, 0, 0, 2, 0, OFF);
-        variant(0, 0, 0, 0, 2, 0, FW_OFF);
-        variant(0, 0, 0, 0, 2, 0, GRID);
+        variant(0, 0, 1, 0, 2, 0, OFF);             // off, full scale
+        variant(0, 0, 1, 0, 2, 0, FW_OFF);
+        variant(0, 0, 1, 0, 2, 0, GRID);
         variant(0, 1, 0, 0, 2, 0, OFF);         // integer scale, thin
         variant(0, 1, 0, 0, 2, 0, FW_OFF);
         variant(0, 1, 0, 1, 0, 0, FW_OFF);      // thick, 25 %
@@ -128,21 +130,21 @@ module tb_sms_regress;
         variant(0, 1, 0, 0, 1, 0, GRID);
         variant(0, 1, 1, 0, 2, 0, OFF);         // output rows
         variant(0, 1, 1, 1, 1, 0, FW_OFF);
-        variant(0, 0, 0, 0, 2, 1, OFF);         // menu overlay up
-        variant(0, 0, 0, 0, 2, 1, FW_OFF);
+        variant(0, 0, 1, 0, 2, 1, OFF);         // menu overlay up
+        variant(0, 0, 1, 0, 2, 1, FW_OFF);
         variant(0, 1, 0, 0, 2, 1, FW_OFF);
         variant(0, 1, 1, 1, 2, 1, OFF);
         variant(0, 1, 0, 1, 2, 0, FW_OFF);      // and back
         // Game Gear mode (the grid bit is live: only the off words)
-        variant(1, 0, 0, 0, 2, 0, OFF);
-        variant(1, 0, 0, 0, 2, 0, FW_OFF);
+        variant(1, 0, 1, 0, 2, 0, OFF);             // off, full scale
+        variant(1, 0, 1, 0, 2, 0, FW_OFF);
         variant(1, 1, 0, 0, 2, 0, OFF);
         variant(1, 1, 0, 0, 2, 0, FW_OFF);
         variant(1, 1, 0, 1, 0, 0, FW_OFF);
         variant(1, 1, 0, 1, 3, 0, OFF);
         variant(1, 1, 1, 0, 1, 0, OFF);
         variant(1, 1, 1, 1, 1, 0, FW_OFF);
-        variant(1, 0, 0, 0, 2, 1, FW_OFF);      // menu overlay up (the full frame)
+        variant(1, 0, 1, 0, 2, 1, FW_OFF);      // menu overlay up (the full frame)
         variant(1, 1, 0, 0, 2, 1, FW_OFF);
         variant(1, 1, 1, 1, 2, 1, OFF);
         $display("tb_sms_regress: %0d pixels identical to the baseline (%0d picture)", total_cmp, total_pic);

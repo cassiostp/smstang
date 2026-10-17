@@ -1,11 +1,11 @@
-// sms2hdmi with smoothing against the scaler it was built from (the baseline, built from the
-// git history by prep.sh as sms2hdmi_fx): with video_config[19:18] clear (0, or the reserved 3)
-// the rgb stream into the hdmi module must be the very same, clock for clock, in every
-// scanline mode, in Master System and Game Gear mode, with the other filters on or off and
-// the menu overlay up or not; and with the overlay up the same holds in every smoothing mode,
-// the overlay is never smoothed. Both get the same video_config (the baseline ignores bits
-// 19:18). In Game Gear mode the LCD grid bit is live in both, so the grid flags travel along
-// with smoothing off too.
+// sms2hdmi without smoothing against the scaler before smoothing was added (the baseline,
+// built from the git history by prep.sh as sms2hdmi_fx): with video_config[19:18] clear (0,
+// or the reserved 3, which the scaler ignores like every other unused bit) the rgb stream into
+// the hdmi module must be the very same, clock for clock, in every scanline mode, in Master
+// System and Game Gear mode, with the other filters on or off and the menu overlay up or not;
+// and with the overlay up the overlay is never filtered. Both get the same video_config
+// (the baseline ignores bits 19:18). In Game Gear mode the LCD grid bit is live in both, so
+// the grid flags travel along too.
 // The frame buffer holds a pseudo-random picture and the overlay is a pattern read through
 // the overlay_x / overlay_y outputs with a two clock latency, so a picture or overlay that
 // lands on other pixels is caught. Settings change in the blanking, then two whole frames
@@ -116,7 +116,7 @@ module tb_smooth_regress;
     endtask
 
     localparam [31:0] OFF = 32'h0000_0000, FW_OFF = 32'h0001_2000, GRID = 32'h0003_A000;
-    localparam [31:0] RSVD = 32'h000C_0000, SHARP = 32'h0004_0000, SOFT = 32'h0008_0000;
+    localparam [31:0] RSVD = 32'h000C_0000;
     // colour, a slot mask and a grid bit the SMS ignores
     localparam [31:0] FXW = 32'h0001_A000 | 3'd2 | (3'd5 << 3) | (3'd1 << 6) | (2'd1 << 9) | (2'd2 << 11) | (2'd2 << 13);
 
@@ -135,7 +135,7 @@ module tb_smooth_regress;
         variant(0, 1, 0, 1, 3, 0, FXW | RSVD);     // 100 %
         variant(0, 1, 1, 0, 2, 0, OFF);            // output rows
         variant(0, 1, 1, 1, 1, 0, FXW | RSVD);
-        // Game Gear mode (the grid bit is live: the flags travel along with smoothing off too)
+        // Game Gear mode (the grid bit is live: the flags travel along too)
         variant(1, 0, 0, 0, 2, 0, OFF);
         variant(1, 0, 0, 0, 2, 0, FW_OFF);
         variant(1, 0, 0, 0, 2, 0, GRID);
@@ -145,13 +145,13 @@ module tb_smooth_regress;
         variant(1, 1, 0, 1, 3, 0, GRID);
         variant(1, 1, 1, 0, 1, 0, OFF);
         variant(1, 1, 1, 1, 1, 0, GRID);
-        // menu overlay up: never smoothed, identical in every smoothing mode
-        variant(0, 0, 0, 0, 2, 1, SHARP);
-        variant(0, 0, 0, 0, 2, 1, SOFT | FXW);
+        // menu overlay up: never filtered
+        variant(0, 0, 0, 0, 2, 1, OFF);
+        variant(0, 0, 0, 0, 2, 1, FW_OFF);
         variant(0, 1, 0, 0, 2, 1, RSVD);
-        variant(0, 1, 1, 1, 2, 1, SHARP | FW_OFF);
-        variant(1, 0, 0, 0, 2, 1, SOFT | GRID);
-        variant(1, 1, 0, 0, 2, 1, SHARP | GRID);
+        variant(0, 1, 1, 1, 2, 1, FW_OFF);
+        variant(1, 0, 0, 0, 2, 1, GRID);
+        variant(1, 1, 0, 0, 2, 1, GRID);
         variant(1, 1, 1, 1, 2, 1, RSVD);
         variant(0, 1, 0, 1, 2, 0, FW_OFF);         // and back
         $display("tb_smooth_regress: %0d pixels identical to the baseline (%0d picture)", total_cmp, total_pic);

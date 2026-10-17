@@ -149,7 +149,7 @@ module tb_sms_scaler;
                     want = BORDER;
                 else begin
                     want = to_rgb(src_color(line));
-                    if (cur_geom ? ((row - ptop) % R >= R - nd) : (on & out & ((row % R) >= R - nd)))
+                    if (on && (cur_geom ? ((row - ptop) % R >= R - nd) : (out & ((row % R) >= R - nd))))
                         want = darken(want, dk);
                 end
                 if (got !== want) fail("picture", row, got, want);
@@ -203,7 +203,7 @@ module tb_sms_scaler;
         begin
             gg = g; sl_on = on; sl_out = out; sl_thick = thick; sl_dark = dk; ov = over;
             cur_gg = g & ~over;                 // the overlay always shows the whole frame
-            cur_geom = on & ~out & ~over;
+            cur_geom = ~out & ~over;
             cur_ov = over;
             settle;
         end
@@ -230,7 +230,9 @@ module tb_sms_scaler;
         #1;
         load_rows;
         // Master System: the vertical geometry and the darkening
-        run(0, 0, 0, 0, 2, 0);                  // off: the old geometry
+        run(0, 0, 0, 0, 2, 0);                  // off, integer scale: no darkening
+        run(0, 0, 0, 1, 0, 0);                  // off, integer scale, thick: still none
+        run(0, 0, 1, 0, 2, 0);                  // off, full scale
         run(0, 1, 0, 0, 2, 0);                  // the default: integer, thin, 75 %
         run(0, 1, 0, 1, 0, 0);
         run(0, 1, 0, 0, 1, 0);
@@ -248,7 +250,7 @@ module tb_sms_scaler;
         run(1, 1, 1, 1, 2, 1);
         // by column: the horizontal geometry
         load_columns;
-        columns(0, 0, 0); columns(0, 1, 0); columns(0, 1, 1);
+        columns(0, 0, 0); columns(0, 1, 0); columns(0, 1, 1); columns(0, 0, 1);
         columns(1, 0, 0); columns(1, 1, 0);
         $display("tb_sms_scaler: PASS");
         $finish;

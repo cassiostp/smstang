@@ -4,11 +4,9 @@
 #   tb_video_fx     video_fx against the golden model (model.py)
 #   tb_sms_regress  sms2hdmi against the scaler before video_fx: identical with no filter on
 #   tb_sms_fx       the filters inside sms2hdmi, checked against the model
-#   tb_smooth_regress  sms2hdmi against the scaler before smoothing: identical with smoothing off
-#   tb_sms_smooth   the smoothing inside sms2hdmi, checked against the model
+#   tb_smooth_regress  sms2hdmi against the scaler before smoothing: identical, bits 19:18 ignored
 # prep.sh (python3, git) makes the vectors and the baselines; with a simulator image that has
-# neither, run prep.sh on the host first and `python3 -I model.py check sms_fx.log` and
-# `python3 -I model.py check_smooth sms_smooth.log sms_src.hex` after.
+# neither, run prep.sh on the host first and `python3 -I model.py check sms_fx.log` after.
 set -e
 cd "$(dirname "$0")"
 RTL=../../src
@@ -25,22 +23,17 @@ iverilog -g2012 -o tb_video_fx.out tb_video_fx.v $RTL/video_fx.v $RTL/scanlines.
 vvp tb_video_fx.out
 
 iverilog -g2012 -o tb_sms_regress.out tb_sms_regress.v $HDMI $RTL/sms2hdmi.sv $RTL/scanlines.v \
-    $RTL/video_fx.v $RTL/smooth.v build/sms2hdmi_base.sv build/scanlines_base.v
+    $RTL/video_fx.v build/sms2hdmi_base.sv build/scanlines_base.v
 vvp tb_sms_regress.out
 
-iverilog -g2012 -o tb_sms_fx.out tb_sms_fx.v $HDMI $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v $RTL/smooth.v
+iverilog -g2012 -o tb_sms_fx.out tb_sms_fx.v $HDMI $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v
 vvp tb_sms_fx.out
 
 iverilog -g2012 -o tb_smooth_regress.out tb_smooth_regress.v $HDMI $RTL/sms2hdmi.sv $RTL/scanlines.v \
-    $RTL/video_fx.v $RTL/smooth.v build/sms2hdmi_fx.sv
+    $RTL/video_fx.v build/sms2hdmi_fx.sv
 vvp tb_smooth_regress.out
-
-iverilog -g2012 -o tb_sms_smooth.out tb_sms_smooth.v $HDMI $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v $RTL/smooth.v
-vvp tb_sms_smooth.out
 if command -v python3 >/dev/null 2>&1; then
     python3 -I model.py check sms_fx.log
-    python3 -I model.py check_smooth sms_smooth.log sms_src.hex
 else
     echo "NOTE: python3 not found, run: python3 -I model.py check sms_fx.log"
-    echo "NOTE: and: python3 -I model.py check_smooth sms_smooth.log sms_src.hex"
 fi
