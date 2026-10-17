@@ -39,8 +39,11 @@ module video(clk, ce_pix, pal, border, ggres, mask_column, cut_mask, smode_M1, s
                   else if (vcount == 464)
                      vsync <= 1'b0;
                end else if (smode_M3) begin
+                  // PAL 240-line mode: 0-266, 466-511 = 313 lines; the CPU
+                  // sees the upper range as D2-FF. (BlastEm jumps 0x10B to
+                  // 0x1D2 for MD V30 PAL; same Sega counter design.)
                   if (vcount == 266)
-                     vcount <= 482;
+                     vcount <= 466;
                   else if (vcount == 482)
                      vsync <= 1'b1;
                   else if (vcount == 485)
