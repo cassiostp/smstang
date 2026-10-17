@@ -5,7 +5,11 @@
 // picture/audio stimuli, and taps for the C++ harness. The HDMI pixel
 // counter is the sim stub (sim/scanlines/hdmi_stub.v) at the native width
 // the real hdmi.sv gives for std_timing = 0; the lock, scaler, audio path
-// and frame buffer are the real RTL. No delays, no file IO.
+// and frame buffer are the real RTL.
+// The hz120 variant soaks the 480p120 BFI timing at full scale (the firmware
+// default): each game frame is read twice (lit pass, then inserted pass).
+// No delays, no file IO.
+`include "variant.vh"
 `timescale 1ns/1ps
 module fl_top (
     input clk,
@@ -15,10 +19,20 @@ module fl_top (
     input gg_in,            // 1: Game Gear mode (160x144 window)
     input mode_m1,          // 1: 224-line mode (counter model only; sms2hdmi has no mode input)
     input mode_m3,          // 1: 240-line mode (counter model only)
+`ifdef HZ120
+    input [1:0] bfi_mode,   // video_config[21:20]: 0 off, 1 black, 2 dim, 3 black
+`endif
     output frame_halt,
     output [8:0] x,
     output [8:0] y,
+`ifdef HZ120
+    output [10:0] cx,
+`endif
     output [9:0] cy,
+`ifdef HZ120
+    output bfi_ins,
+    output [23:0] rgb_out,
+`endif
     output memA_we,
     output [15:0] memA_addr,
     output [15:0] memB_addr,
@@ -50,9 +64,16 @@ module fl_top (
         .audio_l(audio_l), .audio_r(audio_r),
         .overlay(1'b0), .overlay_x(overlay_x), .overlay_y(overlay_y),
         .overlay_color(15'd0),
-        .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0), .sl_out(1'b0),
+        .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0),
+`ifdef HZ120
+        .sl_out(1'b1),
+        .video_config(32'd0), .gg(gg_in),
+        .frame_halt(frame_halt), .std_timing(1'b0), .bfi_mode(bfi_mode),
+`else
+        .sl_out(1'b0),
         .video_config(32'd0), .gg(gg_in),
         .frame_halt(frame_halt), .std_timing(1'b0),
+`endif
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p),
         .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
@@ -60,6 +81,11 @@ module fl_top (
 
     // taps for the harness
     assign cy = dut.cy;
+`ifdef HZ120
+    assign cx = dut.cx;
+    assign bfi_ins = dut.bfi_ins ^ dut.bfi_phase;
+    assign rgb_out = dut.rgb;
+`endif
     assign memA_we = dut.mem_portA_we;
     assign memA_addr = dut.mem_portA_addr;
     assign memB_addr = dut.mem_portB_addr;
