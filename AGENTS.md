@@ -18,7 +18,10 @@ SMS and Game Gear for the Tang Console 138K/60K. Port of `MiSTer-devel/SMS_MiSTe
 gw_sh build.tcl <device>   # console60k console138k (ds2 + usb)
 ```
 
-Only the device and PLL family differ between the two boards. CI:
+Build variants from the same source: `TANGCORE_VARIANT=standard` (720p60, the
+default) or `hz120` (480p120 BFI, console138k only). The files that differ do
+`` `include "variant.vh" `` (`src/variant/<variant>`, `` `define HZ120 `` for
+hz120). Only the device and PLL family differ between the two boards. CI:
 
 ```sh
 gh workflow run cores.yml -R cassiostp/tangcore --ref ci/core-builds -f core=smstang -f ref=<branch> -f board=console138k
@@ -28,13 +31,15 @@ Fails on any setup/hold violation. `buildall.bat` notes 1.9.11.01 is needed for 
 
 ## Clocks and constraints
 
-- `src/smstang.sdc` is the only SDC (both boards share the 50 MHz crystal and PLL dividers): `clk_sys` ~53.70 MHz with a T80 multicycle relax (2 setup / 1 hold on `system/z80_inst`). No `create_generated_clock` entries.
-- Generated in `smstang_top.sv`: `pll_53` (`clk_g -> clk_sys` + SDRAM clock), `pll_27` (-> 27 MHz), `pll_74` (-> 74.25 MHz pixel + 5x), `pll_12` (-> 12 MHz USB into `usb_hid_host`).
+- `src/smstang.sdc` is the only SDC (both boards share the 50 MHz crystal and PLL dividers): `clk_sys` ~53.70 MHz with a T80 multicycle relax (2 setup / 1 hold on `system/z80_inst`). No `create_generated_clock` entries. The hz120 variant uses `src/smstang_hz120.sdc` (`clk_sys` 53.85 MHz) instead.
+- Generated in `smstang_top.sv`: `pll_53` (`clk_g -> clk_sys` + SDRAM clock), `pll_27` (-> 27 MHz), `pll_74` (-> 74.25 MHz pixel + 5x, 54 MHz in the hz120 variant), `pll_12` (-> 12 MHz USB into `usb_hid_host`).
 
 ## Native-rate lock
 
 NTSC SMS is 59.9345 Hz (262 lines x 3420 clocks); HDMI native is a 1652-pixel line (59.9274 Hz). `NATIVE_WIDTH = 1652` in `src/sms2hdmi.sv`; `std_timing = 1` selects the standard 1650 line. `video_std_timing` is tied `1'b0` in `src/smstang_top.sv`, so the build is native-only.
 Halt at VDP line 192 (`HALT_LINE`), release at HDMI row 400 (`RELEASE_ROW`); `frame_halt` gates `ce_cpu/vdp/pix/sp_g`. PAL runs free (halt ignored).
+The hz120 variant outputs 480p120 (VIC 48, `NATIVE_WIDTH = 858`, game 59.9401 Hz)
+and releases the SMS on lit frames only; `video_config[21:20]` selects the BFI mode.
 
 ## Firmware link
 
@@ -44,6 +49,11 @@ Halt at VDP line 192 (`HALT_LINE`), release at HDMI row 400 (`RELEASE_ROW`); `fr
 - `iosys_bl616.v` is one of six divergent copies (`cassiostp/tangcore#30`): a fix to one usually belongs in the others.
 
 ## Simulations (`sim/cosim/README.md` and `sim/video_fx/README.md` say how to run; iverilog in `tangcore-iv:1`)
+
+The `scanlines`, `framelock` and `video_fx` benches take `[standard|hz120|both]`
+(default both); each leg compiles the RTL with its own `src/variant/<variant>`.
+`hz120` runs the 480p120 lock (releases on lit frames, BFI modes 0/1/2 in the
+iverilog bench, full scale in the soak); `check_audio.py` takes `--hz120`.
 
 - `cosim`: firmware-facing `iosys`+32 KB `dpram`, no SDRAM/game/video; FREQ 21.492 MHz for 2 Mbaud.
 - `framelock`: real `sms2hdmi` vs a cycle-exact VDP over ~10 NTSC frames plus a ~400-frame Verilator soak; `tb_hdmi_native`/`tb_native_pos` check std-vs-native line lengths (1650 vs 1652) with identical pictures.
