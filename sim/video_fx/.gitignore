@@ -1,0 +1,7 @@
+*.out
+vec_*.hex
+sms_fx.log
+build/
+__pycache__/
+sms_smooth.log
+sms_src.hex

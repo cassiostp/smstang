@@ -138,7 +138,7 @@ end
 
 wire [63:0] status;           // iosys will set this
 
-reg        gg          = 0;
+reg        gg          = 0;   // Game Gear mode, from core_config[0] below
 reg        systeme     = 0;
 reg        palettemode = 0;
 reg [21:0] cart_mask, cart_mask512;
@@ -150,7 +150,7 @@ wire mask_column;
 wire smode_M1, smode_M2, smode_M3;
 wire pal  /* verilator public */ = status[2];
 wire border = status[13] & ~gg;
-wire ggres = ~status[39] & gg;
+wire ggres = gg;              // limit the picture to the GG 160x144 window
 wire turbo = status[40];
 
 wire [15:0] joy_0, joy_1, joy_2, joy_3;
@@ -182,16 +182,67 @@ wire        nvram_we;
 wire  [7:0] nvram_d;
 wire  [7:0] nvram_q;
 
+// MCU side of the save RAM (iosys_bl616 save-RAM interface, port B below)
+wire [14:0] sv_addr;
+wire  [7:0] sv_din, sv_q;
+wire        sv_we;
+
 // SYSMODE[0]: [0]=EncryptBase,[1]=EncryptBank,[2]=Paddle,[3]=Pedal,[4,5]=E0Type,[6]=E1,[7]=E2
 // SYSMODE[1]: [0]=
 reg [7:0] SYSMODE[1];
 reg [7:0] DSW[3];
 
 
+wire [31:0] core_config;              // from iosys
+wire [31:0] video_config;             // from iosys
+
+// Game Gear mode (core_config[0]). The firmware sets it before each ROM
+// load, so it is stable long before the load reset starts the system.
+always @(posedge clk_sys) begin
+    gg <= core_config[0];
+end
+
+// In GG mode `pause` is the Start button instead: io.v reads it as a level
+// at port $00 bit 7 (and the NMI is off). Pad 1's START.
+// SMS Pause button (an NMI on the console): SELECT on either pad, fired on
+// release and only if SELECT was pressed on its own, so the SELECT+START
+// menu/reset combos don't pause the game. A ~1.2 ms low pulse on NMI_n.
+wire        sel_held = joy1[2] | joy2[2];
+wire        sel_other = |(joy1 & ~12'h004) | |(joy2 & ~12'h004);
+reg         sel_r, sel_alone;
+reg [15:0]  sms_pause_cnt;
+always @(posedge clk_sys) begin
+    sel_r <= sel_held;
+    if (sel_held & ~sel_r)
+        sel_alone <= ~sel_other;
+    else if (sel_held & sel_other)
+        sel_alone <= 0;
+    if (~sel_held & sel_r & sel_alone)
+        sms_pause_cnt <= 16'hffff;
+    else if (sms_pause_cnt != 0)
+        sms_pause_cnt <= sms_pause_cnt - 1'b1;
+end
+wire sms_pause_n = sms_pause_cnt == 0;
+wire pause_menu = core_config[17];    // freeze the system while the game menu is open
+// 0: native-rate HDMI (59.93 Hz for SMS/GG); 1: standard 60 Hz timing, for
+// displays that refuse the native rate (a menu option for it may come later)
+wire video_std_timing = 1'b0;
+`ifndef VERILATOR
+wire frame_halt_raw;                // from sms2hdmi: frame-lock halt, ORed with pause_menu
+`else
+wire frame_halt_raw = 1'b0;         // no sms2hdmi under Verilator: no frame lock
+`endif
+// PAL frames (313 lines) are longer than the HDMI frame, so the halt-lock
+// cannot hold them: run PAL free as before.
+wire frame_halt = frame_halt_raw & ~pal;
+wire ce_cpu_g = ce_cpu & ~pause_menu & ~frame_halt;
+wire ce_vdp_g = ce_vdp & ~pause_menu & ~frame_halt;
+wire ce_pix_g = ce_pix & ~pause_menu & ~frame_halt;
+wire ce_sp_g  = ce_sp  & ~pause_menu & ~frame_halt;
 system #(63) system
 (
-	.clk_sys(clk_sys), .ce_cpu(ce_cpu), .ce_vdp(ce_vdp),
-	.ce_pix(ce_pix), .ce_sp(ce_sp), .turbo(turbo),
+	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp_g),
+	.ce_pix(ce_pix_g), .ce_sp(ce_sp_g), .turbo(turbo),
 	.gg(gg), .ggres(ggres), .systeme(systeme),
 	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~reset),
 
@@ -201,14 +252,15 @@ system #(63) system
 	.rom_rd(ram_rd), .rom_a(ram_addr), .rom_do(ram_dout),
 
 	.j1_up(~joy1[4]), .j1_down(~joy1[5]), .j1_left(~joy1[6]),
-	.j1_right(~joy1[7]), .j1_tl(~joy1[0] & ~joy1[3]), 	// j1_t1 is button 1 (also start). joy1[0] is B, joy1[3] is START
+	.j1_right(~joy1[7]), .j1_tl(gg ? ~joy1[0] : (~joy1[0] & ~joy1[3])), 	// j1_t1 is button 1 (also start in SMS). joy1[0] is B, joy1[3] is START
 	.j1_tr(~joy1[8]),
-	.j1_th(joya_th), .j1_start(swap ? ~joy1[3] : ~joy2[3]), .j1_coin(swap ? ~joy1[11] : ~joy1[11]),
+	.j1_th(joya_th),
+	.j1_start(swap ? ~joy1[3] : ~joy2[3]), .j1_coin(swap ? ~joy1[11] : ~joy1[11]),
 	.j1_a3(swap ? ~joy1[10] : ~joy1[10]),
 
 	.j2_up(~joy2[4]), .j2_down(~joy2[5]), .j2_left(~joy2[6]),
 	.j2_right(~joy2[7]), .j2_tl(~joy2[0] & ~joy2[3]), .j2_tr(~joy2[8]),
-	.j2_th(joyb_th), .pause(joy1[6]&joy2[6]), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
+	.j2_th(joyb_th), .pause(gg ? ~joy1[3] : sms_pause_n), .j2_start(swap ? ~joy1[11] : ~joy2[11]),
 	.j2_coin(swap ? ~joy1[10] : ~joy2[10]), .j2_a3(swap ? ~joy1[8] : ~joy2[8]),
 
 	.j1_tr_out(joya_tr_out), .j1_th_out(joya_th_out), .j2_tr_out(joyb_tr_out),
@@ -246,7 +298,7 @@ wire HBlank, VBlank;
 video video
 (
 	.clk(clk_sys),
-	.ce_pix(ce_pix),
+	.ce_pix(ce_pix_g),
 	.pal(pal),
 	.ggres(ggres),
 	.border(border),
@@ -313,6 +365,8 @@ spram #(.widthad_a(14)) ram_inst
 	.q         (ram_q)
 );
 
+// 32 KB battery RAM (64 blocks of 512 B): port A is the game's paged view,
+// port B belongs to iosys's save channel so the MCU can dump/restore it.
 dpram #(.widthad_a(15)) nvram_inst
 (
 	.clock_a     (clk_sys),
@@ -321,10 +375,10 @@ dpram #(.widthad_a(15)) nvram_inst
 	.data_a      (nvram_d),
 	.q_a         (nvram_q),
 	.clock_b     (clk_sys),
-	.address_b   (/*{sd_lba[5:0],sd_buff_addr}*/),
-	.wren_b      (/*sd_buff_wr & sd_ack*/),
-	.data_b      (/*sd_buff_dout*/),
-	.q_b         (/*sd_buff_din*/)
+	.address_b   (sv_addr),
+	.wren_b      (sv_we),
+	.data_b      (sv_din),
+	.q_b         (sv_q)
 );
 
 ////////////////// I/O //////////////////
@@ -337,18 +391,22 @@ wire [7:0] overlay_y;
 wire [14:0] overlay_color;
 
 sms2hdmi sms2hdmi_inst (
-	.clk(clk_sys), .resetn(1'b1),
+	.clk(clk_sys), .resetn(~reset),
 	.clk_pixel(clk_pixel),.clk_5x_pixel(clk_5x_pixel),
-    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(audio_l), .audio_r(audio_r),
+    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
+    .frame_halt(frame_halt_raw), .std_timing(video_std_timing),
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
+    .scanlines(core_config[16]), .sl_darkness(core_config[19:18]), .sl_thick(core_config[20]), .sl_out(core_config[21]),
+    .video_config(video_config),
+    .gg(gg),
 	.tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
 );
 
 wire [11:0] joy1_btns, joy2_btns;
 wire [11:0] joy1_usb, joy2_usb;
 wire [11:0] joy1_mcu, joy2_mcu;
-assign joy1 = joy1_btns | joy1_usb | joy1_mcu;
-assign joy2 = joy2_btns | joy2_usb | joy2_mcu;
+assign joy1 = overlay ? 12'b0 : joy1_btns | joy1_usb | joy1_mcu;
+assign joy2 = overlay ? 12'b0 : joy2_btns | joy2_usb | joy2_mcu;
 
 controller_ds2 #(.FREQ(53_700_000)) joy1_ds2 (
     .clk(clk_sys), .snes_buttons(joy1_btns),
@@ -377,19 +435,26 @@ usb_hid_host usb_hid_host2 (
 
 assign led = ~{joy1[4:0], usb_type, usb_conerr};
 
-iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5) )     // deep blue smstang logo
+iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5),
+              .SAVE_IF(1), .SAVE_AW(15) )     // deep blue smstang logo, 32 KB battery saves
     sys_inst (
     .clk(clk_sys), .hclk(clk_pixel), .resetn(1'b1),
 
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
+    .core_config(core_config), .video_config(video_config),
     .joy1(joy1_btns | joy1_usb), .joy2(joy2_btns | joy2_usb),
     .hid1(joy1_mcu), .hid2(joy2_mcu),
+    .sv_addr(sv_addr), .sv_din(sv_din), .sv_we(sv_we),
+    .sv_q(sv_q), .sv_core_we(nvram_we),
     .uart_tx(UART_TXD), .uart_rx(UART_RXD),
 
     .rom_loading(rom_loading), .rom_do(rom_do), .rom_do_valid(rom_do_valid)
 );
 
 `else
+
+// no OSD menu under verilator, never pause for menu
+wire overlay = 1'b0;
 
 // rom loading is done by sim_main.cpp
 
