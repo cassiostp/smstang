@@ -4,12 +4,19 @@
 // frame against the model of src/scanlines.v: which source line it shows, border rows,
 // dark rows and the darkened colour; and the horizontal extent of the picture.
 // Fails with $fatal on the first mismatch.
+// The hz120 variant runs the same bench at 480p120 (its integer/full geometries);
+// BFI is off here (bfi_mode 0: every 120 Hz frame is lit), so either frame compares.
+`include "variant.vh"
 `timescale 1ns/1ps
 
 module tb_sms_scaler;
 
     reg clk_pixel = 0, clk = 0;
+`ifdef HZ120
+    always #9.259 clk_pixel = ~clk_pixel;       // 54 MHz
+`else
     always #6.734 clk_pixel = ~clk_pixel;       // 74.25 MHz
+`endif
     always #46.5 clk = ~clk;                    // 10.7 MHz
 
     reg        sl_on = 0, sl_thick = 0, sl_out = 0, ov = 0, gg = 0;
@@ -18,6 +25,9 @@ module tb_sms_scaler;
     reg [14:0] overlay_color = 15'b10101_01010_11100;   // BGR5
     wire [2:0] tmds_d_p, tmds_d_n;
     wire       tmds_clk_p, tmds_clk_n;
+`ifdef HZ120
+    wire       frame_halt;
+`endif
 
     sms2hdmi dut (
         .clk(clk), .resetn(1'b1),
@@ -27,15 +37,25 @@ module tb_sms_scaler;
         .scanlines(sl_on), .sl_darkness(sl_dark), .sl_thick(sl_thick), .sl_out(sl_out),
         .video_config(32'd0),
         .gg(gg),
+`ifdef HZ120
+        .frame_halt(frame_halt), .std_timing(1'b0), .bfi_mode(2'd0),
+`endif
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
     );
 
     // what the HDMI sink would show: rgb while cx = x + 1
+`ifdef HZ120
+    reg [23:0] img [0:720*480-1];
+    always @(posedge clk_pixel)
+        if (dut.cy < 10'd480 && dut.cx >= 11'd1 && dut.cx <= 11'd720)
+            img[dut.cy * 720 + dut.cx - 1] = dut.rgb;
+`else
     reg [23:0] img [0:1280*720-1];
     always @(posedge clk_pixel)
         if (dut.cy < 10'd720 && dut.cx >= 11'd1 && dut.cx <= 11'd1280)
             img[dut.cy * 1280 + dut.cx - 1] = dut.rgb;
+`endif
 
     localparam BORDER = 24'h303030;
 
@@ -92,10 +112,18 @@ module tb_sms_scaler;
         darken = {dim8(p[23:16], d), dim8(p[15:8], d), dim8(p[7:0], d)};
     endfunction
 
+    // The model for the current settings.
+    reg cur_geom, cur_gg, cur_ov;
+`ifdef HZ120
+    // Master System: 192 lines, 2 rows each at integer scale (top 48), 2.5x
+    // fractional at full scale (640x480); Game Gear: the 144-line window at
+    // 3 rows per line at integer scale (top 24, 480x432), fractional at full
+    // scale (533x480). Integer darkens the last rows of each source line
+    // when scanlines are on; full scale darkens evenly spaced output rows.
+`else
     // Master System: 192 lines, 3 rows each with scanlines, 72 border rows above and below.
     // Game Gear: the 144-line window, 5 rows each, in the frame buffer from line 24.
     // The model for the current settings.
-    reg cur_geom, cur_gg, cur_ov;
     function integer exp_line(input integer row);     // frame buffer line, -1 for a border row
         begin
             if (cur_ov)
@@ -108,10 +136,23 @@ module tb_sms_scaler;
                 exp_line = row * 192 / 720;
         end
     endfunction
+`endif
 
     // wait for the end of the frame drawn with the new settings: img holds it when this
-    // returns (in the blanking at row 726). Called right after the previous check, the
-    // next frame is the first with the new settings; at the start it takes one more.
+    // returns. Called right after the previous check, the next frame is the first with
+    // the new settings; at the start it takes one more.
+`ifdef HZ120
+    // (in the blanking at row 521)
+    task settle;
+        begin
+            repeat (2) begin
+                while (dut.cy != 10'd521) @(posedge clk_pixel);
+                while (dut.cy == 10'd521) @(posedge clk_pixel);
+            end
+        end
+    endtask
+`else
+    // (in the blanking at row 726)
     integer settle_frames = 2;
     task settle;
         begin
@@ -122,6 +163,7 @@ module tb_sms_scaler;
             settle_frames = 1;
         end
     endtask
+`endif
 
     task fail(input [8*60-1:0] what, input integer row, input [23:0] got, input [23:0] want);
         begin
@@ -134,6 +176,107 @@ module tb_sms_scaler;
     integer row, line, rr, nd, R, ptop, XP, x, first, last, runs, runlen, minrun, maxrun, w, pw, ncols;
     reg [23:0] want, got, prev;
 
+`ifdef HZ120
+    task check_rows(input on, input out, input thick, input [1:0] dk, input over);
+        begin
+            R = cur_gg ? 3 : 2;
+            nd = cur_gg ? (thick ? 2 : 1) : 1;      // at 2 rows per line thin and thick darken 1 row alike
+            XP = 360;
+            for (row = 0; row < 480; row = row + 1) begin
+                got = img[row * 720 + XP];
+                if (over)
+                    want = overlay_rgb(overlay_color);
+                else if (cur_gg) begin
+                    if (cur_geom) begin
+                        if (row < 24 || row >= 24 + 3 * 144)
+                            want = BORDER;
+                        else begin
+                            line = (row - 24) / 3 + 24;
+                            rr = (row - 24) % 3;
+                            want = to_rgb(src_color(line));
+                            if (on && (rr >= R - nd)) want = darken(want, dk);
+                        end
+                    end else begin
+                        line = row * 144 / 480;
+                        want = to_rgb(src_color(line + 24));
+                        if (on & out & ((row % R) >= R - nd)) want = darken(want, dk);
+                    end
+                end else if (cur_geom) begin
+                    if (row < 48 || row >= 48 + 2 * 192)
+                        want = BORDER;
+                    else begin
+                        line = (row - 48) / 2;
+                        rr = (row - 48) % 2;
+                        want = to_rgb(src_color(line));
+                        if (on && (rr >= R - nd)) want = darken(want, dk);
+                    end
+                end else begin
+                    line = row * 192 / 480;
+                    want = to_rgb(src_color(line));
+                    if (on & out & ((row % R) >= R - nd)) want = darken(want, dk);
+                end
+                if (got !== want) fail("picture", row, got, want);
+                // beside the picture: the border
+                if (img[row * 720 + 20] !== BORDER) fail("left border", row, img[row * 720 + 20], BORDER);
+                if (img[row * 720 + 700] !== BORDER) fail("right border", row, img[row * 720 + 700], BORDER);
+            end
+        end
+    endtask
+
+    // horizontal extent and pixel widths on a row through the middle of the picture
+    task check_columns;
+        begin
+            pw = cur_gg ? (cur_geom ? 480 : 533) : cur_geom ? 512 : 640;
+            ncols = cur_gg ? 160 : 256;
+            row = 240;
+            first = -1; last = -1; runs = 0; minrun = 99; maxrun = 0; runlen = 0; prev = BORDER;
+            for (x = 0; x < 720; x = x + 1) begin
+                got = img[row * 720 + x];
+                if (got !== BORDER) begin
+                    if (first < 0) first = x;
+                    last = x;
+                    if (got !== prev) begin
+                        if (runs > 0) begin
+                            if (runlen < minrun) minrun = runlen;
+                            if (runlen > maxrun) maxrun = runlen;
+                        end
+                        runs = runs + 1; runlen = 0;
+                    end
+                    runlen = runlen + 1;
+                end
+                prev = got;
+            end
+            w = last - first + 1;
+            if (first !== (720 - pw) / 2 || w !== pw) begin
+                $display("FAIL: picture spans x=%0d..%0d (width %0d), want %0d..%0d (gg=%b geom=%b)", first, last, w, (720 - pw) / 2, (720 + pw) / 2 - 1, cur_gg, cur_geom);
+                $fatal(1, "tb_sms_scaler: FAIL");
+            end
+            if (runs !== ncols) begin
+                $display("FAIL: %0d source columns on the row, want %0d", runs, ncols);
+                $fatal(1, "tb_sms_scaler: FAIL");
+            end
+            if (cur_gg && cur_geom) begin
+                if (minrun !== 3 || maxrun !== 3) begin
+                    $display("FAIL: GG integer pixel widths %0d..%0d, want 3..3", minrun, maxrun);
+                    $fatal(1, "tb_sms_scaler: FAIL");
+                end
+            end else if (cur_geom) begin
+                if (minrun !== 2 || maxrun !== 2) begin
+                    $display("FAIL: integer pixel widths %0d..%0d, want 2..2", minrun, maxrun);
+                    $fatal(1, "tb_sms_scaler: FAIL");
+                end
+            end else if (cur_gg) begin
+                if (minrun !== 3 || maxrun !== 4) begin
+                    $display("FAIL: GG full pixel widths %0d..%0d, want 3..4", minrun, maxrun);
+                    $fatal(1, "tb_sms_scaler: FAIL");
+                end
+            end else if (minrun < 2 || maxrun > 3) begin
+                $display("FAIL: fractional pixel widths %0d..%0d, want 2..3", minrun, maxrun);
+                $fatal(1, "tb_sms_scaler: FAIL");
+            end
+        end
+    endtask
+`else
     task check_rows(input on, input out, input thick, input [1:0] dk, input over);
         begin
             R = cur_gg ? 5 : 3;
@@ -198,6 +341,7 @@ module tb_sms_scaler;
             end
         end
     endtask
+`endif
 
     task set(input g, input on, input out, input thick, input [1:0] dk, input over);
         begin
@@ -229,6 +373,33 @@ module tb_sms_scaler;
         cur_geom = 0; cur_gg = 0; cur_ov = 0;
         #1;
         load_rows;
+`ifdef HZ120
+        // Master System: the vertical geometry and the darkening
+        run(0, 0, 0, 0, 2, 0);                  // off, integer scale: no darkening
+        run(0, 0, 0, 1, 0, 0);                  // off, integer scale, thick: still none
+        run(0, 0, 1, 0, 2, 0);                  // off, full scale: no darkening
+        run(0, 1, 0, 0, 2, 0);                  // integer, thin, 75 %
+        run(0, 1, 0, 1, 0, 0);
+        run(0, 1, 0, 0, 1, 0);
+        run(0, 1, 0, 1, 3, 0);
+        run(0, 1, 1, 0, 2, 0);                  // full scale: evenly spaced output rows
+        run(0, 1, 1, 1, 1, 0);
+        run(0, 1, 0, 0, 2, 1);                  // menu up: the overlay is left alone
+        run(0, 1, 1, 1, 2, 1);
+        run(0, 1, 0, 1, 2, 0);                  // and back
+        // Game Gear: 3 rows per line at integer scale, fractional at full scale
+        run(1, 0, 0, 0, 2, 0);
+        run(1, 0, 1, 0, 2, 0);
+        run(1, 1, 0, 0, 2, 0);
+        run(1, 1, 0, 1, 3, 0);
+        run(1, 1, 1, 0, 1, 0);
+        run(1, 1, 1, 1, 2, 0);
+        run(1, 1, 1, 1, 2, 1);
+        // by column: the horizontal geometry
+        load_columns;
+        columns(0, 0, 0); columns(0, 1, 0); columns(0, 1, 1); columns(0, 0, 1);
+        columns(1, 0, 0); columns(1, 1, 0); columns(1, 0, 1); columns(1, 1, 1);
+`else
         // Master System: the vertical geometry and the darkening
         run(0, 0, 0, 0, 2, 0);                  // off, integer scale: no darkening
         run(0, 0, 0, 1, 0, 0);                  // off, integer scale, thick: still none
@@ -252,6 +423,7 @@ module tb_sms_scaler;
         load_columns;
         columns(0, 0, 0); columns(0, 1, 0); columns(0, 1, 1); columns(0, 0, 1);
         columns(1, 0, 0); columns(1, 1, 0);
+`endif
         $display("tb_sms_scaler: PASS");
         $finish;
     end
