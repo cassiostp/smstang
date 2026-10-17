@@ -1,6 +1,8 @@
 // Implementation of HDMI Spec v1.4a
 // By Sameer Puri https://github.com/sameer
 
+`include "variant.vh"
+
 module hdmi 
 #(
     // Defaults to 640x480 which should be supported by almost if not all HDMI sinks.
@@ -21,7 +23,11 @@ module hdmi
 
     // Defaults to minimum bit lengths required to represent positions.
     // Modify these parameters if you have alternate desired bit lengths.
-    parameter int BIT_WIDTH = VIDEO_ID_CODE < 4 ? 10 : VIDEO_ID_CODE == 4 ? 11 : 12,
+    parameter int BIT_WIDTH = VIDEO_ID_CODE < 4
+`ifdef HZ120
+        || VIDEO_ID_CODE == 48 || VIDEO_ID_CODE == 49
+`endif
+        ? 10 : VIDEO_ID_CODE == 4 ? 11 : 12,
     parameter int BIT_HEIGHT = VIDEO_ID_CODE == 16 ? 11: 10,
 
     // A true HDMI signal sends auxiliary data (i.e. audio, preambles) which prevents it from being parsed by DVI signal sinks.
@@ -63,11 +69,12 @@ module hdmi
     parameter int START_Y = 0,
 
     // Native console frame rate: when std_timing is 1 the 720p mode (VIC 4)
-    // uses the standard 1650 x 750 timing; when 0 it uses
-    // NATIVE_FRAME_WIDTH x 750, a line a few pixels longer or shorter that
-    // runs the HDMI output at the console's own refresh rate. Only the line
-    // length changes; the sync pulse start/size and polarity stay the 720p
-    // values. All other VIC modes are untouched.
+    // uses the standard 1650 x 750 timing and the 480p120 modes (VIC 48 and
+    // VIC 49, hz120 variant) the standard 858 x 525 timing; when 0 they use
+    // NATIVE_FRAME_WIDTH x 750 (720p) or x 525 (480p120), a line a few pixels
+    // longer or shorter that runs the HDMI output at the console's own
+    // refresh rate. Only the line length changes; the sync pulse start/size
+    // and polarity stay the standard values. All other VIC modes are untouched.
     parameter int NATIVE_FRAME_WIDTH = 1650
 )
 (
@@ -76,7 +83,8 @@ module hdmi
     input logic clk_audio,
     // synchronous reset back to 0,0
     input logic reset,
-    // 1: standard 720p timing; 0: native console rate (NATIVE_FRAME_WIDTH)
+    // 1: standard timing (1650-pixel 720p, 858-pixel 480p120); 0: native
+    // console rate (NATIVE_FRAME_WIDTH)
     input logic std_timing,
     input logic [23:0] rgb,
     input logic [AUDIO_BIT_WIDTH-1:0] audio_sample_word [1:0],
@@ -147,6 +155,20 @@ generate
             assign vsync_pulse_size = 5;
             assign invert = 0;
         end
+`ifdef HZ120
+        48, 49:  // 480p120 (VIC 48 4:3, VIC 49 16:9): the 480p60 totals at 54 MHz
+        begin
+            assign frame_width = std_timing ? 858 : NATIVE_FRAME_WIDTH;
+            assign frame_height = 525;
+            assign screen_width = 720;
+            assign screen_height = 480;
+            assign hsync_pulse_start = 16;
+            assign hsync_pulse_size = 62;
+            assign vsync_pulse_start = 9;
+            assign vsync_pulse_size = 6;
+            assign invert = 1;
+        end
+`endif
         16, 34:
         begin
             assign frame_width = 2200;
@@ -213,6 +235,9 @@ end
 localparam real VIDEO_RATE = (VIDEO_ID_CODE == 1 ? 25.2E6
     : VIDEO_ID_CODE == 2 || VIDEO_ID_CODE == 3 ? 27.027E6
     : VIDEO_ID_CODE == 4 ? 74.25E6
+`ifdef HZ120
+    : VIDEO_ID_CODE == 48 || VIDEO_ID_CODE == 49 ? 54E6
+`endif
     : VIDEO_ID_CODE == 16 ? 148.5E6
     : VIDEO_ID_CODE == 17 || VIDEO_ID_CODE == 18 ? 27E6
     : VIDEO_ID_CODE == 19 ? 74.25E6

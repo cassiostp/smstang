@@ -3,6 +3,8 @@
  * 
  * nand2mario, 3/2025
  */
+`include "variant.vh"
+
 module smstang_top(
     input clk_g,                    // crystal clock
 
@@ -70,7 +72,8 @@ wire [15:0] audio_r/* verilator public */;
 
 ////////////////// Clocks & CE //////////////////
 
-// 53.70Mhz (~=53.693175) system clock
+// 53.70Mhz (~=53.693175) system clock (hz120 variant: 53.85 MHz, 50*28/26,
+// so the halt lock can hold the SMS to half the 480p120 HDMI rate)
 wire clk_sys, clk27;
 wire clk_pixel, clk_5x_pixel;
 wire locked;
@@ -395,6 +398,9 @@ sms2hdmi sms2hdmi_inst (
 	.clk_pixel(clk_pixel),.clk_5x_pixel(clk_5x_pixel),
     .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
     .frame_halt(frame_halt_raw), .std_timing(video_std_timing),
+`ifdef HZ120
+    .bfi_mode(video_config[21:20]),
+`endif
     .overlay(overlay), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
     .scanlines(core_config[16]), .sl_darkness(core_config[19:18]), .sl_thick(core_config[20]), .sl_out(core_config[21]),
     .video_config(video_config),
@@ -408,11 +414,16 @@ wire [11:0] joy1_mcu, joy2_mcu;
 assign joy1 = overlay ? 12'b0 : joy1_btns | joy1_usb | joy1_mcu;
 assign joy2 = overlay ? 12'b0 : joy2_btns | joy2_usb | joy2_mcu;
 
-controller_ds2 #(.FREQ(53_700_000)) joy1_ds2 (
+`ifdef HZ120
+localparam int SYS_FREQ = 53_846_154;   // hz120 variant sys clock (50*28/26)
+`else
+localparam int SYS_FREQ = 53_700_000;
+`endif
+controller_ds2 #(.FREQ(SYS_FREQ)) joy1_ds2 (
     .clk(clk_sys), .snes_buttons(joy1_btns),
     .ds_clk(ds_clk), .ds_miso(ds_miso), .ds_mosi(ds_mosi), .ds_cs(ds_cs) 
 );
-controller_ds2 #(.FREQ(53_700_000)) joy2_ds2 (
+controller_ds2 #(.FREQ(SYS_FREQ)) joy2_ds2 (
    .clk(clk_sys), .snes_buttons(joy2_btns),
    .ds_clk(ds_clk2), .ds_miso(ds_miso2), .ds_mosi(ds_mosi2), .ds_cs(ds_cs2) 
 );
@@ -435,7 +446,7 @@ usb_hid_host usb_hid_host2 (
 
 assign led = ~{joy1[4:0], usb_type, usb_conerr};
 
-iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(53_700_000), .CORE_ID(5),
+iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(SYS_FREQ), .CORE_ID(5),
               .SAVE_IF(1), .SAVE_AW(15) )     // deep blue smstang logo, 32 KB battery saves
     sys_inst (
     .clk(clk_sys), .hclk(clk_pixel), .resetn(1'b1),
