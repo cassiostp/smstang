@@ -10,10 +10,10 @@
 # small clusters (the hold), never a runaway.
 import math, sys
 
-FS = 48028.5  # DUT audio tick: 2x773 pixel clocks (AUDIO_CLK_DELAY in sms2hdmi.sv)
-SYS_PER_AUDIO = 1118.172  # sys edges per audio tick: 1546 * (53.7037037/74.25)
-OK_WAIT_LO = 80      # steady waits: theory 106.6 sys clocks
-OK_WAIT_HI = 140
+FS = 48042.7  # DUT audio tick: 2x562 pixel clocks (AUDIO_CLK_DELAY in sms2hdmi.sv)
+SYS_PER_AUDIO = 1120.8  # sys edges per audio tick: 1124 * (53.8461538/54)
+OK_WAIT_LO = 1900    # steady waits: theory 2293 sys clocks
+OK_WAIT_HI = 2700
 
 def windows(logpath):
     # Returns (windows, steady_release_count). Times are sys edges; the dump

@@ -1,27 +1,27 @@
 // Stand-ins for the Gowin and HDMI parts of a scaler, for simulation: a pixel
-// counter with the real module's timing (cx, cy count the 1650x750 frame, and
+// counter with the real module's timing (cx, cy count the frame, and
 // the picture is the rgb input seen while cx = x + 1), and a pass-through
 // output buffer.
 module hdmi #(
-    parameter VIDEO_ID_CODE = 4,
+    parameter VIDEO_ID_CODE = 48,
     parameter DVI_OUTPUT = 0,
-    parameter VIDEO_REFRESH_RATE = 60.0,
+    parameter VIDEO_REFRESH_RATE = 120.0,
     parameter IT_CONTENT = 1,
     parameter AUDIO_RATE = 48000,
     parameter AUDIO_BIT_WIDTH = 16,
     parameter START_X = 0,
     parameter START_Y = 0,
-    // Line length (htotal) of the 720p mode when std_timing is 0, picked so
-    // the HDMI frame rate matches the console's own refresh rate. Only
+    // Line length (htotal) of the 480p120 mode when std_timing is 0, picked
+    // so the HDMI frame rate is twice the console's own refresh rate. Only
     // frame_width changes; the active picture stays put.
-    parameter int NATIVE_FRAME_WIDTH = 1650
+    parameter int NATIVE_FRAME_WIDTH = 858
 ) (
     input         clk_pixel_x5,
     input         clk_pixel,
     input         clk_audio,
     input  [23:0] rgb,
     input         reset,
-    // 1: standard 1650-pixel 60.00 Hz timing; 0: native rate. Unconnected
+    // 1: standard 858-pixel 120.00 Hz timing; 0: native rate. Unconnected
     // (z) in baselines built from history means standard timing.
     input         std_timing,
     input  [15:0] audio_sample_word [1:0],
@@ -32,14 +32,14 @@ module hdmi #(
     output [10:0] frame_width,
     output [9:0]  frame_height
 );
-    assign frame_width = (std_timing === 1'b0) ? NATIVE_FRAME_WIDTH : 11'd1650;
-    assign frame_height = 750;
+    assign frame_width = (std_timing === 1'b0) ? NATIVE_FRAME_WIDTH : 11'd858;
+    assign frame_height = 525;
     assign tmds = 3'b0;
     assign tmds_clock = 1'b0;
     always @(posedge clk_pixel) begin
         cx <= (cx == frame_width - 11'd1) ? 11'd0 : cx + 11'd1;
         if (cx == frame_width - 11'd1)
-            cy <= (cy == 10'd749) ? 10'd0 : cy + 10'd1;
+            cy <= (cy == 10'd524) ? 10'd0 : cy + 10'd1;
     end
 endmodule
 

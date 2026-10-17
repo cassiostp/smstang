@@ -1,15 +1,16 @@
-// sms2hdmi with scanlines, whole frames: the HDMI part is a stub that counts cx/cy like
-// the real one (hdmi_stub.v), the picture is the scaler's rgb output.
+// sms2hdmi with scanlines, whole frames, at 480p120: the HDMI part is a stub
+// that counts cx/cy like the real one (hdmi_stub.v), the picture is the scaler's rgb output.
 // Checks, for each setting, in Master System and Game Gear mode, every output row of the
 // frame against the model of src/scanlines.v: which source line it shows, border rows,
 // dark rows and the darkened colour; and the horizontal extent of the picture.
 // Fails with $fatal on the first mismatch.
+// BFI is off here (bfi_mode 0: every 120 Hz frame is lit), so either frame compares.
 `timescale 1ns/1ps
 
 module tb_sms_scaler;
 
     reg clk_pixel = 0, clk = 0;
-    always #6.734 clk_pixel = ~clk_pixel;       // 74.25 MHz
+    always #9.259 clk_pixel = ~clk_pixel;       // 54 MHz
     always #46.5 clk = ~clk;                    // 10.7 MHz
 
     reg        sl_on = 0, sl_thick = 0, sl_out = 0, ov = 0, gg = 0;
@@ -18,6 +19,7 @@ module tb_sms_scaler;
     reg [14:0] overlay_color = 15'b10101_01010_11100;   // BGR5
     wire [2:0] tmds_d_p, tmds_d_n;
     wire       tmds_clk_p, tmds_clk_n;
+    wire       frame_halt;
 
     sms2hdmi dut (
         .clk(clk), .resetn(1'b1),
@@ -27,15 +29,16 @@ module tb_sms_scaler;
         .scanlines(sl_on), .sl_darkness(sl_dark), .sl_thick(sl_thick), .sl_out(sl_out),
         .video_config(32'd0),
         .gg(gg),
+        .frame_halt(frame_halt), .std_timing(1'b0), .bfi_mode(2'd0),
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
     );
 
     // what the HDMI sink would show: rgb while cx = x + 1
-    reg [23:0] img [0:1280*720-1];
+    reg [23:0] img [0:720*480-1];
     always @(posedge clk_pixel)
-        if (dut.cy < 10'd720 && dut.cx >= 11'd1 && dut.cx <= 11'd1280)
-            img[dut.cy * 1280 + dut.cx - 1] = dut.rgb;
+        if (dut.cy < 10'd480 && dut.cx >= 11'd1 && dut.cx <= 11'd720)
+            img[dut.cy * 720 + dut.cx - 1] = dut.rgb;
 
     localparam BORDER = 24'h303030;
 
@@ -92,34 +95,20 @@ module tb_sms_scaler;
         darken = {dim8(p[23:16], d), dim8(p[15:8], d), dim8(p[7:0], d)};
     endfunction
 
-    // Master System: 192 lines, 3 rows each with scanlines, 72 border rows above and below.
-    // Game Gear: the 144-line window, 5 rows each, in the frame buffer from line 24.
-    // The model for the current settings.
+    // Master System: 192 lines, 2 rows each with scanlines (top 48), 2.5x fractional
+    // without (640x480); Game Gear: the 144-line window at 3 rows per line (top 24),
+    // 480x432 either way. The model for the current settings.
     reg cur_geom, cur_gg, cur_ov;
-    function integer exp_line(input integer row);     // frame buffer line, -1 for a border row
-        begin
-            if (cur_ov)
-                exp_line = -2;
-            else if (cur_gg)
-                exp_line = row / 5 + 24;
-            else if (cur_geom)
-                exp_line = (row < 72 || row >= 648) ? -1 : (row - 72) / 3;
-            else
-                exp_line = row * 192 / 720;
-        end
-    endfunction
 
-    // wait for the end of the frame drawn with the new settings: img holds it when this
-    // returns (in the blanking at row 726). Called right after the previous check, the
-    // next frame is the first with the new settings; at the start it takes one more.
-    integer settle_frames = 2;
+    // wait for the end of the second frame drawn with the new settings: img holds it
+    // when this returns (in the blanking at row 521). Called right after the previous
+    // check, the next frame is the first with the new settings.
     task settle;
         begin
-            repeat (settle_frames) begin
-                while (dut.cy != 10'd725) @(posedge clk_pixel);
-                while (dut.cy == 10'd725) @(posedge clk_pixel);
+            repeat (2) begin
+                while (dut.cy != 10'd521) @(posedge clk_pixel);
+                while (dut.cy == 10'd521) @(posedge clk_pixel);
             end
-            settle_frames = 1;
         end
     endtask
 
@@ -136,26 +125,47 @@ module tb_sms_scaler;
 
     task check_rows(input on, input out, input thick, input [1:0] dk, input over);
         begin
-            R = cur_gg ? 5 : 3;
-            nd = cur_gg ? (thick ? 3 : 2) : (thick ? 2 : 1);
-            ptop = (cur_geom && !cur_gg) ? 72 : 0;
-            XP = 640;
-            for (row = 0; row < 720; row = row + 1) begin
-                got = img[row * 1280 + XP];
-                line = exp_line(row);
+            R = cur_gg ? 3 : 2;
+            nd = cur_gg ? (thick ? 2 : 1) : 1;      // at 2 rows per line thin and thick darken 1 row alike
+            ptop = cur_gg ? 24 : 48;
+            XP = 360;
+            for (row = 0; row < 480; row = row + 1) begin
+                got = img[row * 720 + XP];
                 if (over)
                     want = overlay_rgb(overlay_color);
-                else if (line < 0)
-                    want = BORDER;
-                else begin
+                else if (cur_gg) begin
+                    if (cur_geom) begin
+                        if (row < 24 || row >= 24 + 3 * 144)
+                            want = BORDER;
+                        else begin
+                            line = (row - 24) / 3 + 24;
+                            rr = (row - 24) % 3;
+                            want = to_rgb(src_color(line));
+                            if (rr >= R - nd) want = darken(want, dk);
+                        end
+                    end else begin
+                        line = row * 144 / 480;
+                        want = to_rgb(src_color(line + 24));
+                        if (on & out & ((row % R) >= R - nd)) want = darken(want, dk);
+                    end
+                end else if (cur_geom) begin
+                    if (row < 48 || row >= 48 + 2 * 192)
+                        want = BORDER;
+                    else begin
+                        line = (row - 48) / 2;
+                        rr = (row - 48) % 2;
+                        want = to_rgb(src_color(line));
+                        if (rr >= R - nd) want = darken(want, dk);
+                    end
+                end else begin
+                    line = row * 192 / 480;
                     want = to_rgb(src_color(line));
-                    if (cur_geom ? ((row - ptop) % R >= R - nd) : (on & out & ((row % R) >= R - nd)))
-                        want = darken(want, dk);
+                    if (on & out & ((row % R) >= R - nd)) want = darken(want, dk);
                 end
                 if (got !== want) fail("picture", row, got, want);
                 // beside the picture: the border
-                if (img[row * 1280 + 100] !== BORDER) fail("left border", row, img[row * 1280 + 100], BORDER);
-                if (img[row * 1280 + 1200] !== BORDER) fail("right border", row, img[row * 1280 + 1200], BORDER);
+                if (img[row * 720 + 20] !== BORDER) fail("left border", row, img[row * 720 + 20], BORDER);
+                if (img[row * 720 + 700] !== BORDER) fail("right border", row, img[row * 720 + 700], BORDER);
             end
         end
     endtask
@@ -163,12 +173,12 @@ module tb_sms_scaler;
     // horizontal extent and pixel widths on a row through the middle of the picture
     task check_columns;
         begin
-            pw = cur_gg ? 800 : cur_geom ? 768 : 960;
+            pw = cur_gg ? 480 : cur_geom ? 512 : 640;
             ncols = cur_gg ? 160 : 256;
-            row = 360;
+            row = 240;
             first = -1; last = -1; runs = 0; minrun = 99; maxrun = 0; runlen = 0; prev = BORDER;
-            for (x = 0; x < 1280; x = x + 1) begin
-                got = img[row * 1280 + x];
+            for (x = 0; x < 720; x = x + 1) begin
+                got = img[row * 720 + x];
                 if (got !== BORDER) begin
                     if (first < 0) first = x;
                     last = x;
@@ -184,16 +194,26 @@ module tb_sms_scaler;
                 prev = got;
             end
             w = last - first + 1;
-            if (first !== (1280 - pw) / 2 || w !== pw) begin
-                $display("FAIL: picture spans x=%0d..%0d (width %0d), want %0d..%0d (gg=%b geom=%b)", first, last, w, (1280 - pw) / 2, (1280 + pw) / 2 - 1, cur_gg, cur_geom);
+            if (first !== (720 - pw) / 2 || w !== pw) begin
+                $display("FAIL: picture spans x=%0d..%0d (width %0d), want %0d..%0d (gg=%b geom=%b)", first, last, w, (720 - pw) / 2, (720 + pw) / 2 - 1, cur_gg, cur_geom);
                 $fatal(1, "tb_sms_scaler: FAIL");
             end
             if (runs !== ncols) begin
                 $display("FAIL: %0d source columns on the row, want %0d", runs, ncols);
                 $fatal(1, "tb_sms_scaler: FAIL");
             end
-            if (minrun < (pw / ncols) || maxrun > (pw + ncols - 1) / ncols) begin
-                $display("FAIL: pixel widths %0d..%0d, want %0d..%0d", minrun, maxrun, pw / ncols, (pw + ncols - 1) / ncols);
+            if (cur_gg) begin
+                if (minrun !== 3 || maxrun !== 3) begin
+                    $display("FAIL: GG pixel widths %0d..%0d, want 3..3", minrun, maxrun);
+                    $fatal(1, "tb_sms_scaler: FAIL");
+                end
+            end else if (cur_geom) begin
+                if (minrun !== 2 || maxrun !== 2) begin
+                    $display("FAIL: integer pixel widths %0d..%0d, want 2..2", minrun, maxrun);
+                    $fatal(1, "tb_sms_scaler: FAIL");
+                end
+            end else if (minrun < 2 || maxrun > 3) begin
+                $display("FAIL: fractional pixel widths %0d..%0d, want 2..3", minrun, maxrun);
                 $fatal(1, "tb_sms_scaler: FAIL");
             end
         end
@@ -230,7 +250,7 @@ module tb_sms_scaler;
         #1;
         load_rows;
         // Master System: the vertical geometry and the darkening
-        run(0, 0, 0, 0, 2, 0);                  // off: the old geometry
+        run(0, 0, 0, 0, 2, 0);                  // off: the fractional geometry
         run(0, 1, 0, 0, 2, 0);                  // the default: integer, thin, 75 %
         run(0, 1, 0, 1, 0, 0);
         run(0, 1, 0, 0, 1, 0);
@@ -240,7 +260,7 @@ module tb_sms_scaler;
         run(0, 1, 0, 0, 2, 1);                  // menu up: the overlay is left alone
         run(0, 1, 1, 1, 2, 1);
         run(0, 1, 0, 1, 2, 0);                  // and back
-        // Game Gear: already 5 rows per line
+        // Game Gear: 3 rows per line either way
         run(1, 0, 0, 0, 2, 0);
         run(1, 1, 0, 0, 2, 0);
         run(1, 1, 0, 1, 3, 0);

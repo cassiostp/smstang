@@ -45,6 +45,7 @@ module tb_sms_fx;
         .scanlines(sl_on), .sl_darkness(sl_dark), .sl_thick(sl_thick), .sl_out(sl_out),
         .video_config(vcfg), .gg(gg),
         .overlay(ov), .overlay_x(ovx), .overlay_y(ovy), .overlay_color(ovc),
+        .bfi_mode(2'd0),
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
     );

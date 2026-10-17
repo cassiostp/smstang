@@ -1,14 +1,14 @@
 // Native line length keeps the picture where it is: two sms2hdmi side by
 // side (the HDMI part is the sim stub), one at standard timing and one at
-// native, fed the same frame buffer, must show the very same 1280x720
-// picture; only the line length differs (1650 vs 1652). SMS and Game Gear
-// mode. Fails with $fatal on the first mismatch.
+// native, fed the same frame buffer, must show the very same 720x480
+// picture; at 480p120 the native line is the standard one (858). SMS and
+// Game Gear mode. Fails with $fatal on the first mismatch.
 `timescale 1ns/1ps
 
 module tb_native_pos;
 
     reg clk_pixel = 0;
-    always #6.734 clk_pixel = ~clk_pixel;       // 74.25 MHz
+    always #9.259 clk_pixel = ~clk_pixel;       // 54 MHz
 
     reg [15:0] audio_l = 0, audio_r = 0;
     wire [2:0] tmds_d_p, tmds_d_n, tmds_d_p2, tmds_d_n2;
@@ -23,7 +23,7 @@ module tb_native_pos;
         .overlay(1'b0), .overlay_x(), .overlay_y(), .overlay_color(15'd0),
         .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0), .sl_out(1'b0),
         .video_config(32'd0), .gg(gg),
-        .std_timing(1'b1),
+        .std_timing(1'b1), .bfi_mode(2'd0),
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p),
         .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)
@@ -36,7 +36,7 @@ module tb_native_pos;
         .overlay(1'b0), .overlay_x(), .overlay_y(), .overlay_color(15'd0),
         .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0), .sl_out(1'b0),
         .video_config(32'd0), .gg(gg),
-        .std_timing(1'b0),
+        .std_timing(1'b0), .bfi_mode(2'd0),
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n2), .tmds_clk_p(tmds_clk_p2),
         .tmds_d_n(tmds_d_n2), .tmds_d_p(tmds_d_p2)
@@ -55,16 +55,16 @@ module tb_native_pos;
     end
 
     // what each sink would show: rgb while cx = x + 1
-    reg [23:0] img_std [0:1280*720-1];
-    reg [23:0] img_nat [0:1280*720-1];
+    reg [23:0] img_std [0:720*480-1];
+    reg [23:0] img_nat [0:720*480-1];
     reg [10:0] max_cx_std = 0, max_cx_nat = 0;
     always @(posedge clk_pixel) begin
         if (std.cx > max_cx_std) max_cx_std <= std.cx;
         if (nat.cx > max_cx_nat) max_cx_nat <= nat.cx;
-        if (std.cy < 10'd720 && std.cx >= 11'd1 && std.cx <= 11'd1280)
-            img_std[std.cy * 1280 + std.cx - 1] = std.rgb;
-        if (nat.cy < 10'd720 && nat.cx >= 11'd1 && nat.cx <= 11'd1280)
-            img_nat[nat.cy * 1280 + nat.cx - 1] = nat.rgb;
+        if (std.cy < 10'd480 && std.cx >= 11'd1 && std.cx <= 11'd720)
+            img_std[std.cy * 720 + std.cx - 1] = std.rgb;
+        if (nat.cy < 10'd480 && nat.cx >= 11'd1 && nat.cx <= 11'd720)
+            img_nat[nat.cy * 720 + nat.cx - 1] = nat.rgb;
     end
 
     // frame lengths in pixel clocks
@@ -77,8 +77,8 @@ module tb_native_pos;
         cy_nat_q <= nat.cy;
         if (std.cy == 0 && cy_std_q != 0) begin
             done_std <= done_std + 1;
-            if (in_std && len_std != 0 && len_std != 32'd1650 * 750) begin
-                $display("FAIL: std frame %0d clocks, want %0d", len_std, 1650 * 750);
+            if (in_std && len_std != 0 && len_std != 32'd858 * 525) begin
+                $display("FAIL: std frame %0d clocks, want %0d", len_std, 858 * 525);
                 $fatal(1, "tb_native_pos: FAIL");
             end
             len_std <= 1;
@@ -87,8 +87,8 @@ module tb_native_pos;
             len_std <= len_std + 1;
         if (nat.cy == 0 && cy_nat_q != 0) begin
             done_nat <= done_nat + 1;
-            if (in_nat && len_nat != 0 && len_nat != 32'd1652 * 750) begin
-                $display("FAIL: native frame %0d clocks, want %0d", len_nat, 1652 * 750);
+            if (in_nat && len_nat != 0 && len_nat != 32'd858 * 525) begin
+                $display("FAIL: native frame %0d clocks, want %0d", len_nat, 858 * 525);
                 $fatal(1, "tb_native_pos: FAIL");
             end
             len_nat <= 1;
@@ -101,22 +101,22 @@ module tb_native_pos;
         integer p, bad;
         begin
             bad = 0;
-            for (p = 0; p < 1280 * 720; p = p + 1)
+            for (p = 0; p < 720 * 480; p = p + 1)
                 if (img_std[p] !== img_nat[p]) begin
                     bad = bad + 1;
                     if (bad <= 8)
                         $display("MISMATCH pix %0d (y=%0d x=%0d): std %h nat %h",
-                                 p, p / 1280, p % 1280, img_std[p], img_nat[p]);
+                                 p, p / 720, p % 720, img_std[p], img_nat[p]);
                 end
             if (bad != 0) begin
-                $display("FAIL: gg=%b: %0d of %0d visible pixels differ", gg, bad, 1280 * 720);
+                $display("FAIL: gg=%b: %0d of %0d visible pixels differ", gg, bad, 720 * 480);
                 $fatal(1, "tb_native_pos: FAIL");
             end
-            if (max_cx_std != 1649 || max_cx_nat != 1651) begin
+            if (max_cx_std != 857 || max_cx_nat != 857) begin
                 $display("FAIL: gg=%b: max cx std=%0d nat=%0d", gg, max_cx_std, max_cx_nat);
                 $fatal(1, "tb_native_pos: FAIL");
             end
-            $display("tb_native_pos gg=%b: 1280x720 identical, line lengths 1650/1652", gg);
+            $display("tb_native_pos gg=%b: 720x480 identical, line lengths 858/858", gg);
         end
     endtask
 
@@ -139,9 +139,9 @@ module tb_native_pos;
         $finish;
     end
 
-    // watchdog: 8 HDMI frames at 1652x750 is plenty
+    // watchdog: 8 HDMI frames at 858x525 is plenty
     initial begin
-        repeat (8 * 1652 * 750 + 100) @(posedge clk_pixel);
+        repeat (8 * 858 * 525 + 100) @(posedge clk_pixel);
         $display("FAIL: watchdog");
         $fatal(1, "tb_native_pos: FAIL");
     end

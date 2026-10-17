@@ -1,15 +1,24 @@
-// Verilator harness for the SMS frame-lock soak: exact-rate clocks (double
-// fs scheduling, no drift), the scenario (power-on, menu pause, game-reload
-// reset, second pause over ~400 NTSC frames) and the checks. Mirrors
-// tb_frame_lock.v; this is the engine that makes 400+ frames affordable.
+// Verilator harness for the SMS frame-lock soak at 480p120: exact-rate clocks
+// (double fs scheduling, no drift), the scenario (power-on, menu pause,
+// game-reload reset, second pause over ~400 NTSC frames) and the checks.
+// Mirrors tb_frame_lock.v; this is the engine that makes 400+ frames affordable.
 // Configs (argv[2]): sms (192-line, default), sms224, sms240 (the VDP's
 // 224/240-line counter branches; sms2hdmi still stores only lines 0-191),
 // gg (Game Gear window, soft smoothing so the neighbour-line reads count
-// in the read ages). Optional argv[3] "short" quarters the scenario.
+// in the read ages). Optional argv[3] "short" quarters the scenario,
+// optional argv[4] selects the BFI mode (default 1, black).
 //
-// Exact rates: clk_sys 50*29/27 MHz, clk_pixel 74.25 MHz. Time is counted in
-// sys-clock edges for waits/ages (theory: steady wait 106.6 sys, HDMI frame
-// 896146.6 sys) and checked against integer bands, so the verdict does not
+// The HDMI side runs at 480p120 for BFI: every game frame must be read twice
+// (lit pass, then inserted pass), each pass from a single game frame
+// (per-line write-frame tags), lit passes stepping by exactly one game
+// frame, with the inserted pass repeating the lit one; the inserted pass is
+// all black (mode 1). The swap interval (1800 game frames) is longer than
+// the soak, so no phase swap happens here; the swap itself is covered by a
+// directed Python model (see the report), like the NES reference.
+//
+// Exact rates: clk_sys 50*28/26 MHz, clk_pixel 54 MHz. Time is counted in
+// sys-clock edges for waits/ages (theory: steady wait 2293 sys, HDMI frame
+// 449166.7 sys) and checked against integer bands, so the verdict does not
 // depend on the time base.
 // Prints tb_frame_lock: PASS on success (and returns nonzero otherwise).
 #include <cstdio>
@@ -19,27 +28,39 @@
 #include "Vfl_top.h"
 #include "verilated.h"
 
-static const int64_t WAIT_LO = 80;       // steady waits stay in 80..140 sys
-static const int64_t WAIT_HI = 140;
-static const int64_t RATE_LO = 896140;   // sys edges per HDMI frame
-static const int64_t RATE_HI = 896153;
-static const int64_t AGE_MAX = 550000;   // reads must be this VDP frame's data
-                                             // (stale = 896k+; GG's oldest line ~463k)
-static const int64_t AGE_MIN = 30000;    // ... with margin (theory ~57k..259k)
+static const int64_t WAIT_LO = 1900;     // steady waits stay in 1900..2700 sys
+static const int64_t WAIT_HI = 2700;
+static const int64_t RATE_LO = 449160;   // sys edges per HDMI frame
+static const int64_t RATE_HI = 449173;
+static const int64_t MAX_AGE = 860000;   // reads must be this VDP frame's or the
+                                         // previous one's data (inserted pass
+                                         // lags one game frame: oldest ~805k)
+static const int64_t STALE = 900000;     // older than a game frame: stale
 static const int AUDIO_MAX_STEP = 4200;  // 440 Hz sine: ~1890/48 kHz step
 static const int AUDIO_MAX_REPEAT = 6;
 
 int main(int argc, char **argv) {
-    if (argc < 2 || argc > 4) { fprintf(stderr, "usage: %s tag [sms|sms224|sms240|gg] [short]\n", argv[0]); return 2; }
+    if (argc < 2 || argc > 5) { fprintf(stderr, "usage: %s tag [sms|sms224|sms240|gg] [short] [bfi]\n", argv[0]); return 2; }
     std::string tag = argv[1];
     std::string cfg = argc >= 3 ? argv[2] : "sms";
     bool short_scn = argc >= 4 && std::string(argv[3]) == "short";
+    int bfi = 1;
+    if (argc >= 5) bfi = std::string(argv[4])[0] - '0';
     int gg_in = 0, mode_m1 = 0, mode_m3 = 0, sm_mode = 0;
     int active_lines = 192;   // VDP active lines (vbl_st in src/video.v)
     if (cfg == "sms224") { mode_m1 = 1; active_lines = 224; }
     else if (cfg == "sms240") { mode_m3 = 1; active_lines = 240; }
     else if (cfg == "gg") { gg_in = 1; sm_mode = 2; active_lines = 168; }
     else if (cfg != "sms") { fprintf(stderr, "unknown config %s\n", cfg.c_str()); return 2; }
+    if (bfi < 0 || bfi > 3) { fprintf(stderr, "bad bfi %d\n", bfi); return 2; }
+    // the black/inserted visual check only applies to mode 1; the lock, rate,
+    // tag and audio checks run in every mode
+    bool visual = (bfi == 1);
+    // tag/age checks only cover reads in the visible picture: border-row
+    // reads address held lines whose tags legitimately lag (and the
+    // smoothing neighbour reads flap the address there), which the 60 Hz
+    // bench never tripped on only because its geometry never flaps
+    int pic_top = gg_in ? 24 : 0, pic_h = gg_in ? 432 : 480;
     // scenario lengths in VDP frames (run-in, run, run, run)
     const int LEN0 = short_scn ? 15 : 60, LEN2 = short_scn ? 30 : 120;
     const int LEN4 = short_scn ? 30 : 120, LEN6 = short_scn ? 25 : 100;
@@ -50,8 +71,8 @@ int main(int argc, char **argv) {
     FILE *af = fopen(("audio_hdmi_" + tag + ".hex").c_str(), "w");
 #define LOG(...) do { fprintf(log, __VA_ARGS__); fputc('\n', log); } while (0)
 
-    const double P_SYS_FS = 1e15 * 27.0 / (50.0e6 * 29.0);   // 53.7037 MHz
-    const double P_PIX_FS = 1e15 / 74.25e6;
+    const double P_SYS_FS = 1e15 * 26.0 / (50.0e6 * 28.0);   // 53.8462 MHz
+    const double P_PIX_FS = 1e15 / 54.0e6;
     int64_t k_sys = 0, k_pix = 0;
     int64_t next_sys = (int64_t)llround(P_SYS_FS);
     int64_t next_pix = (int64_t)llround(P_PIX_FS);
@@ -59,7 +80,11 @@ int main(int argc, char **argv) {
     auto eval = [&]() { t->eval(); };
 
     int64_t wr_last[192], wr_prev[192];
-    for (int i = 0; i < 192; i++) wr_last[i] = wr_prev[i] = 0;
+    int wr_frame[192];
+    for (int i = 0; i < 192; i++) wr_last[i] = wr_prev[i] = 0, wr_frame[i] = -1;
+    int game_wr = 0;                 // game frame currently being written
+    int pass_fmin = 0, pass_fmax = -1, pass_ins = 0, last_lit = -1;
+    int lit_nonzero = 0, ins_nonzero = 0, stale_in_frame = 0;
 
     // scenario, counted in VDP frames (y==192 entries with the model running)
     int phase = 0;   // 0 run-in, 1 pause1, 2 run, 3 reset, 4 run, 5 pause2, 6 run, 7 done
@@ -68,9 +93,9 @@ int main(int argc, char **argv) {
     bool por_n = false, pause_tb = false;
     bool prev192 = false;
 
-    int locked = 0, forgive = 1, settled = 0;
-    int violations = 0;
+    int locked = 0, forgive = 1, violations = 0;
     int halt_entered = 0, released = 0, hdmi_frames = 0, frame_idx = 0, vdp_frames = 0;
+    int last_event_frame = 0;   // power-on counts as an event (startup settle)
     int64_t t_enter = 0, last_wait = 0;
     int64_t frame_min_age = INT64_MAX, frame_max_age = 0;
     int64_t run_min_age = INT64_MAX, run_max_age = 0, run_min_wait = INT64_MAX, run_max_wait = 0;
@@ -86,10 +111,10 @@ int main(int argc, char **argv) {
 
     t->clk = 0; t->clk_pixel = 0;
     t->por_n = 0; t->pause_tb = 0;
-    t->gg_in = gg_in; t->mode_m1 = mode_m1; t->mode_m3 = mode_m3; t->sm_mode = sm_mode;
+    t->gg_in = gg_in; t->mode_m1 = mode_m1; t->mode_m3 = mode_m3; t->sm_mode = sm_mode; t->bfi_mode = bfi;
     eval();
-    LOG("config %s: gg=%d m1=%d m3=%d sm=%d, VDP active lines %d, halt at y=192 (%s)",
-        cfg.c_str(), gg_in, mode_m1, mode_m3, sm_mode, active_lines,
+    LOG("config %s: gg=%d m1=%d m3=%d sm=%d bfi=%d, VDP active lines %d, halt at y=192 (%s)",
+        cfg.c_str(), gg_in, mode_m1, mode_m3, sm_mode, bfi, active_lines,
         active_lines <= 192 ? "in vblank" : "inside the active picture");
 
     while (sys_edge < E_CAP) {
@@ -105,9 +130,12 @@ int main(int argc, char **argv) {
         if (rising_sys) {
             if (phase == 0 && !por_n && sys_edge > 50) { por_n = true; }
             bool is192 = (t->y == 192);
-            if (is192 && !prev192 && !pause_tb && por_n) {
-                frames_in_phase++;
-                vdp_frames++;
+            if (is192 && !prev192) {
+                game_wr++;           // writes from here belong to the next game frame
+                if (!pause_tb && por_n) {
+                    frames_in_phase++;
+                    vdp_frames++;
+                }
                 if ((phase == 0 && frames_in_phase >= LEN0) ||
                     (phase == 2 && frames_in_phase >= LEN2) ||
                     (phase == 4 && frames_in_phase >= LEN4) ||
@@ -138,8 +166,9 @@ int main(int argc, char **argv) {
                                // transitional waits (a reset that lands on
                                // a halt entry truncates that halt and
                                // leaves the next wait arbitrary too)
-                settled = 0;   // re-lock grace for the age checks
-                mask_until = sys_edge + 3 * 896150;
+                last_event_frame = frame_idx;
+                last_lit = -1;
+                mask_until = sys_edge + 6 * 449167;   // ~6 HDMI frames
             }
             prev_por = por_n; prev_pause = pause_tb;
             int halt = t->frame_halt;
@@ -159,7 +188,7 @@ int main(int argc, char **argv) {
                     // event, plus the reset-on-halt-entry race, which
                     // truncates one halt and leaves the next arbitrary)
                     // are forgiven; anything else must be the rate
-                    // difference, ~107 sys clocks
+                    // difference, ~2293 sys clocks
                     if (last_wait >= WAIT_LO && last_wait <= WAIT_HI) {
                         locked = 1;
                         forgive = 0;
@@ -175,25 +204,42 @@ int main(int argc, char **argv) {
             halt_q = halt;
             if (t->memA_we) {
                 int ln = (t->memA_addr >> 8) & 0xffff;
-                if (ln >= 0 && ln < 192) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; }
+                if (ln >= 0 && ln < 192) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; wr_frame[ln] = game_wr; }
             }
         }
 
         if (rising_pix) {
             int cy = t->cy;
+            if (cy == 100 && cy_q != 100) pass_ins = t->bfi_ins;
+            // BFI check: picture-centre sample (360, cy) on every picture row
+            if (t->cx == 360 && cy >= pic_top && cy < pic_top + pic_h && locked) {
+                if (pass_ins) { if (t->rgb_out != 0) ins_nonzero++; }
+                else if (t->rgb_out != 0) lit_nonzero++;
+            }
             if (cy == 0 && cy_q != 0 && cy_q >= 0) {
                 int64_t len = frame_sys0 ? sys_edge - frame_sys0 : 0;
                 frame_sys0 = sys_edge;
                 if (frame_sys0 && por_n && len) {
                     if (len < RATE_LO || len > RATE_HI) { LOG("FAIL: hdmi frame %d len %lld sys", frame_idx, (long long)len); violations++; }
                     if (locked) {
-                        if (frame_idx % 50 == 0 || frame_max_age > AGE_MAX || frame_min_age < AGE_MIN)
-                            LOG("hdmi frame %d: min_age=%lld max_age=%lld wait=%lld", frame_idx, (long long)frame_min_age, (long long)frame_max_age, (long long)last_wait);
-                        // settled>3: the phase is exact again at most two
-                        // frames after any event (startup, pause-off, reload)
-                        if (settled > 3 && frame_max_age > AGE_MAX) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
-                        if (settled > 3 && frame_min_age < AGE_MIN) { LOG("FAIL: min age %lld sys in frame %d", (long long)frame_min_age, frame_idx); violations++; }
-                        settled++;
+                        if (frame_idx % 50 == 0 || frame_max_age > MAX_AGE || frame_min_age == INT64_MAX)
+                            LOG("hdmi frame %d: ins=%d game=%d..%d min_age=%lld max_age=%lld wait=%lld", frame_idx, pass_ins, pass_fmin, pass_fmax, (long long)frame_min_age, (long long)frame_max_age, (long long)last_wait);
+                        // settled: the phase is exact again at most two game
+                        // frames (four HDMI frames) after any event
+                        bool settled = frame_idx - last_event_frame > 6;
+                        if (settled && pass_fmax >= 0) {
+                            if (pass_fmin != pass_fmax) { LOG("FAIL: mixed game frames %d..%d in hdmi frame %d (ins=%d)", pass_fmin, pass_fmax, frame_idx, pass_ins); violations++; }
+                            else if (!pass_ins) {
+                                if (last_lit >= 0 && pass_fmin != last_lit + 1) { LOG("FAIL: lit game frame %d after %d in hdmi frame %d", pass_fmin, last_lit, frame_idx); violations++; }
+                                last_lit = pass_fmin;
+                            } else if (last_lit >= 0 && pass_fmin != last_lit) {
+                                LOG("FAIL: inserted game frame %d, lit was %d, in hdmi frame %d", pass_fmin, last_lit, frame_idx); violations++;
+                            }
+                            if (visual && pass_ins && ins_nonzero) { LOG("FAIL: %d non-black centre samples in inserted hdmi frame %d", ins_nonzero, frame_idx); violations++; }
+                            if (visual && !pass_ins && !lit_nonzero) { LOG("FAIL: lit hdmi frame %d all black at centre", frame_idx); violations++; }
+                            if (frame_max_age > MAX_AGE) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
+                            if (stale_in_frame) { LOG("FAIL: %d stale reads in frame %d", stale_in_frame, frame_idx); violations++; }
+                        }
                         if (frame_max_age > run_max_age) run_max_age = frame_max_age;
                         if (frame_min_age < run_min_age) run_min_age = frame_min_age;
                     }
@@ -202,16 +248,29 @@ int main(int argc, char **argv) {
                 hdmi_frames++;
                 frame_min_age = INT64_MAX;
                 frame_max_age = 0;
+                pass_fmin = 0; pass_fmax = -1; lit_nonzero = 0; ins_nonzero = 0; stale_in_frame = 0;
             }
             cy_q = cy;
             int rd = (t->memB_addr >> 8) & 0xffff;
+            bool pic_row = cy >= pic_top && cy < pic_top + pic_h && cy != 0;
             if (rd != rd_q) {
                 rd_q = rd;
-                if (rd >= 0 && rd < 192 && locked && wr_last[rd]) {
-                    int64_t age = sys_edge - wr_last[rd];
-                    if (age < 0) age = sys_edge - wr_prev[rd];
+                if (rd >= 0 && rd < 192 && locked && pic_row) {
+                    int64_t w = (wr_last[rd] > 0 && wr_last[rd] < sys_edge) ? wr_last[rd] : wr_prev[rd];
+                    int64_t age = (w > 0) ? sys_edge - w : INT64_MAX;
                     if (age < frame_min_age) frame_min_age = age;
-                    if (age > frame_max_age) frame_max_age = age;
+                    if (age < run_min_age) run_min_age = age;
+                    if (age != INT64_MAX) {
+                        if (age > frame_max_age) frame_max_age = age;
+                        if (age > run_max_age) run_max_age = age;
+                        if (age > STALE) stale_in_frame++;
+                    } else {
+                        stale_in_frame++;
+                    }
+                    if (wr_frame[rd] >= 0) {
+                        if (pass_fmax < 0 || wr_frame[rd] < pass_fmin) pass_fmin = wr_frame[rd];
+                        if (wr_frame[rd] > pass_fmax) pass_fmax = wr_frame[rd];
+                    }
                 }
             }
             int ca = t->clk_audio;
@@ -236,7 +295,7 @@ int main(int argc, char **argv) {
 
     LOG("done: halted=%d released=%d hdmi=%d vdp=%d violations=%d", halt_entered, released, hdmi_frames, vdp_frames, violations);
     LOG("audio: max_hdmi_step=%d (bound %d) max_repeat=%d", max_hdmi_step, AUDIO_MAX_STEP, max_repeat);
-    LOG("wait sys: min=%lld max=%lld (steady theory 106.6)", (long long)run_min_wait, (long long)run_max_wait);
+    LOG("wait sys: min=%lld max=%lld (steady theory 2293)", (long long)run_min_wait, (long long)run_max_wait);
     LOG("age sys: min=%lld max=%lld", (long long)run_min_age, (long long)run_max_age);
     if (violations != 0) { LOG("tb_frame_lock: FAIL"); fclose(log); fclose(af); return 1; }
     if (released < RELEASED_MIN) { LOG("tb_frame_lock: FAIL: too few frames"); fclose(log); fclose(af); return 1; }
