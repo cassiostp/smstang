@@ -16,7 +16,7 @@ RTL := $(COSIM)/../../src
 GEN := $(COSIM)/build/gen
 OBJ := $(COSIM)/build/obj
 # The container user may have no writable home (CI runners): no ccache.
-DOCKER := docker run --rm --user "$(shell id -u):$(shell id -g)" -e CCACHE_DISABLE=1
+DOCKER := docker run --rm --name hz120vsms_cosim --user "$(shell id -u):$(shell id -g)" -e CCACHE_DISABLE=1
 VMOUNT := -v "$(COSIM)/../..:/coresim-src:ro" -v "$(COSIM)/build:/coresim-build" -w /coresim-build
 VERILATOR := $(DOCKER) $(VMOUNT) verilator/verilator:latest
 IVERILOG := $(DOCKER) -v "$(COSIM)/../..:/coresim-src:ro" -v "$(COSIM)/build:/coresim-build" -w /coresim-build tangcore-iv:1
@@ -77,6 +77,10 @@ COSIM_SRCS := /coresim-src/sim/cosim/cosim_top.sv \
 	/coresim-src/sim/cosim/gowin/gowin_dpb_menu.v \
 	/coresim-build/gen/dpram_sim.v
 
+# textdisp.v does `include "variant.vh": the cosim model is the standard
+# variant (its OSD runs at 720p timings).
+COSIM_VARIANT_INC := -I/coresim-src/src/variant/standard
+
 model: $(GEN)/iosys_bl616_cosim.v $(GEN)/dpram_sim.v $(GEN)/uart_fixed_sim.v
 	mkdir -p $(OBJ) $(COSIM)/build/runtime
 	# -Wno-*: the core's own RTL carries pre-existing style Verilator flags
@@ -86,6 +90,7 @@ model: $(GEN)/iosys_bl616_cosim.v $(GEN)/dpram_sim.v $(GEN)/uart_fixed_sim.v
 	$(VERILATOR) --cc --top-module cosim_top --prefix Vcosim_top \
 	    -Mdir obj -DCOSIM -CFLAGS "-O2" \
 	    -Wno-PINMISSING -Wno-IMPLICIT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-CASEINCOMPLETE \
+	    $(COSIM_VARIANT_INC) \
 	    $(COSIM_SRCS) > $(COSIM)/build/verilate.log 2>&1 && \
 	test ! -s $(COSIM)/build/verilate.log || ! grep -E "PINMISSING.*(cosim_top|dpram|gowin_dpb)" $(COSIM)/build/verilate.log
 	# NOTE: PINMISSING is waived only for the core's own files (unconnected
@@ -104,6 +109,7 @@ model: $(GEN)/iosys_bl616_cosim.v $(GEN)/dpram_sim.v $(GEN)/uart_fixed_sim.v
 
 lint: $(GEN)/iosys_bl616_cosim.v $(GEN)/dpram_sim.v $(GEN)/uart_fixed_sim.v
 	$(IVERILOG) iverilog -g2012 -DCOSIM -o /dev/null -s cosim_top \
+	    $(COSIM_VARIANT_INC) \
 	    /coresim-src/sim/cosim/cosim_top.sv \
 	    /coresim-build/gen/iosys_bl616_cosim.v /coresim-build/gen/uart_fixed_sim.v \
 	    /coresim-src/src/iosys/textdisp.v /coresim-src/sim/cosim/gowin/gowin_dpb_menu.v \

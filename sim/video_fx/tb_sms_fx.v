@@ -9,6 +9,7 @@
 // every output column/row the grid flag marks must be exactly the last column/row of a source
 // pixel/line (5 output columns/rows per source pixel/line), and every last column/row of the
 // picture must carry the flag; in SMS mode the flags stay low even with the grid bit set.
+`include "variant.vh"
 `timescale 1ns/1ps
 
 module tb_sms_fx;
@@ -44,6 +45,9 @@ module tb_sms_fx;
         .audio_l(16'd0), .audio_r(16'd0),
         .scanlines(sl_on), .sl_darkness(sl_dark), .sl_thick(sl_thick), .sl_out(sl_out),
         .video_config(vcfg), .gg(gg),
+`ifdef HZ120
+        .bfi_mode(2'd0),
+`endif
         .overlay(ov), .overlay_x(ovx), .overlay_y(ovy), .overlay_color(ovc),
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
         .tmds_clk_n(tmds_clk_n), .tmds_clk_p(tmds_clk_p), .tmds_d_n(tmds_d_n), .tmds_d_p(tmds_d_p)

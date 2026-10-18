@@ -7,7 +7,20 @@ if {$argc == 0} {
 
 set dev [lindex $argv 0]
 
+# TangCore build variant (the 120 Hz side-by-side bitstream is built from
+# the same source): TANGCORE_VARIANT=standard (720p60, the default) or hz120
+# (480p120 BFI, console138k only). Anything else is an error.
+set variant "standard"
+if {[info exists ::env(TANGCORE_VARIANT)] && $::env(TANGCORE_VARIANT) ne ""} {
+    set variant $::env(TANGCORE_VARIANT)
+}
+if {$variant ne "standard" && $variant ne "hz120"} {
+    error "Unknown TangCore variant $variant (want standard or hz120)"
+}
 if {$dev eq "console60k"} {
+    if {$variant eq "hz120"} {
+        error "TangCore variant hz120 is console138k-only"
+    }
     set_device GW5AT-LV60PG484AC1/I0 -device_version B
     add_file -type cst "src/boards/console.cst"
     add_file -type verilog "src/plla/pll_12.v"
@@ -24,6 +37,7 @@ if {$dev eq "console60k"} {
 } else {
     error "Unknown device $dev"
 }
+puts "TangCore variant: $variant"
 set_option -output_base_name smstang_${dev}
 
 add_file -type verilog "src/MC8123.v"
@@ -118,7 +132,17 @@ add_file -type verilog "src/vdp_sprite_shifter.v"
 add_file -type verilog "src/vdp_sprites.v"
 add_file -type verilog "src/video.v"
 
-add_file -type sdc "src/smstang.sdc"
+# The build variant: files that differ between standard and hz120 do
+# `include "variant.vh" (`define HZ120 for hz120, nothing for standard).
+set_option -include_path "src/variant/$variant"
+
+# The sys clock differs per variant (53.70 vs 53.85 MHz), so each variant
+# has its own SDC; the standard one is the int/round6 file untouched.
+if {$variant eq "hz120"} {
+    add_file -type sdc "src/smstang_hz120.sdc"
+} else {
+    add_file -type sdc "src/smstang.sdc"
+}
 
 set_option -synthesis_tool gowinsynthesis
 set_option -top_module smstang_top

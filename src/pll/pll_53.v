@@ -7,6 +7,8 @@
 //Device Version: B
 //Created Time: Sat Mar 29 22:19:01 2025
 
+`include "variant.vh"
+
 module pll_53 (lock, clkout0, clkout1, clkin);
 
 output lock;
@@ -80,14 +82,23 @@ PLL PLL_inst (
 defparam PLL_inst.FCLKIN = "50";
 defparam PLL_inst.IDIV_SEL = 1;
 defparam PLL_inst.FBDIV_SEL = 1;
+`ifdef HZ120
+defparam PLL_inst.ODIV0_SEL = 26;   // hz120 variant: 50 MHz x 28 / 26 = 53.8462 MHz sys
+defparam PLL_inst.ODIV1_SEL = 26;   // SDRAM clock tracks the system clock, as before
+`else
 defparam PLL_inst.ODIV0_SEL = 27;
 defparam PLL_inst.ODIV1_SEL = 27;
+`endif
 defparam PLL_inst.ODIV2_SEL = 8;
 defparam PLL_inst.ODIV3_SEL = 8;
 defparam PLL_inst.ODIV4_SEL = 8;
 defparam PLL_inst.ODIV5_SEL = 8;
 defparam PLL_inst.ODIV6_SEL = 8;
+`ifdef HZ120
+defparam PLL_inst.MDIV_SEL = 28;    // VCO 1400 MHz (was 29 / 1450 MHz)
+`else
 defparam PLL_inst.MDIV_SEL = 29;
+`endif
 defparam PLL_inst.MDIV_FRAC_SEL = 0;
 defparam PLL_inst.ODIV0_FRAC_SEL = 0;
 defparam PLL_inst.CLKOUT0_EN = "TRUE";

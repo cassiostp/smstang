@@ -10,10 +10,21 @@
 # small clusters (the hold), never a runaway.
 import math, sys
 
-FS = 48028.5  # DUT audio tick: 2x773 pixel clocks (AUDIO_CLK_DELAY in sms2hdmi.sv)
-SYS_PER_AUDIO = 1118.172  # sys edges per audio tick: 1546 * (53.7037037/74.25)
-OK_WAIT_LO = 80      # steady waits: theory 106.6 sys clocks
-OK_WAIT_HI = 140
+# usage: check_audio.py [--hz120] audio.hex tb.log [audio.hex tb.log ...]
+# The hz120 variant ticks audio at 2x562 pixel clocks (54 MHz pixel, 53.8462
+# MHz sys) with ~2293-sys waits; standard is 2x773 (74.25 MHz, 53.7037 MHz).
+HZ120 = len(sys.argv) > 1 and sys.argv[1] == '--hz120'
+if HZ120:
+    sys.argv.pop(1)
+    FS = 48042.7  # DUT audio tick: 2x562 pixel clocks (AUDIO_CLK_DELAY in sms2hdmi.sv)
+    SYS_PER_AUDIO = 1120.8  # sys edges per audio tick: 1124 * (53.8461538/54)
+    OK_WAIT_LO = 1900    # steady waits: theory 2293 sys clocks
+    OK_WAIT_HI = 2700
+else:
+    FS = 48028.5  # DUT audio tick: 2x773 pixel clocks (AUDIO_CLK_DELAY in sms2hdmi.sv)
+    SYS_PER_AUDIO = 1118.172  # sys edges per audio tick: 1546 * (53.7037037/74.25)
+    OK_WAIT_LO = 80      # steady waits: theory 106.6 sys clocks
+    OK_WAIT_HI = 140
 
 def windows(logpath):
     # Returns (windows, steady_release_count). Times are sys edges; the dump
@@ -94,7 +105,7 @@ def goertzel(xs, f, fs):
 
 def main(argv):
     if len(argv) < 3 or len(argv) % 2 == 0:
-        sys.exit("usage: check_audio.py audio.hex tb.log [audio.hex tb.log ...]")
+        sys.exit("usage: check_audio.py [--hz120] audio.hex tb.log [audio.hex tb.log ...]")
     ok = True
     pairs = [(argv[i], argv[i + 1]) for i in range(1, len(argv) - 1, 2)]
     for path, logpath in pairs:
