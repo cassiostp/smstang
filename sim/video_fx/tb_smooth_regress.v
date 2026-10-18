@@ -41,7 +41,7 @@ module tb_smooth_regress;
         .ce_pix(1'b0), .x(9'd0), .y(9'd0), .color(12'd0),
         .audio_l(16'd0), .audio_r(16'd0),
         .scanlines(sl_on), .sl_darkness(sl_dark), .sl_thick(sl_thick), .sl_out(sl_out),
-        .video_config(vcfg), .gg(gg),
+        .video_config(vcfg), .gg(gg), .smode_m1(1'b0), .smode_m3(1'b0),
 `ifdef HZ120
         .bfi_mode(2'd0),
 `endif

@@ -29,7 +29,7 @@ module tb_native_pos;
         .audio_l(audio_l), .audio_r(audio_r),
         .overlay(1'b0), .overlay_x(), .overlay_y(), .overlay_color(15'd0),
         .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0), .sl_out(1'b0),
-        .video_config(32'd0), .gg(gg),
+        .video_config(32'd0), .gg(gg), .smode_m1(1'b0), .smode_m3(1'b0),
 `ifdef HZ120
         .std_timing(1'b1), .bfi_mode(2'd0),
 `else
@@ -46,7 +46,7 @@ module tb_native_pos;
         .audio_l(audio_l), .audio_r(audio_r),
         .overlay(1'b0), .overlay_x(), .overlay_y(), .overlay_color(15'd0),
         .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0), .sl_out(1'b0),
-        .video_config(32'd0), .gg(gg),
+        .video_config(32'd0), .gg(gg), .smode_m1(1'b0), .smode_m3(1'b0),
 `ifdef HZ120
         .std_timing(1'b0), .bfi_mode(2'd0),
 `else

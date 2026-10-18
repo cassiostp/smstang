@@ -25,6 +25,8 @@ module sms2hdmi (
     input sl_out,               // core_config[21]: scale, 0 = integer, 1 = full
     input [31:0] video_config,  // colour controls, CRT mask and (Game Gear only) LCD grid, see video_fx.v
     input gg,                   // 1: Game Gear mode, show the 160x144 window (core_config[0])
+    input smode_m1,             // 1: 224-line mode (VDP reg1 M1 with M2)
+    input smode_m3,             // 1: 240-line mode (VDP reg1 M3 with M2)
 
 	// video clocks
 	input clk_pixel,
@@ -63,9 +65,9 @@ wire [10:0] cx;
 //
 // BRAM frame buffer
 //
-localparam MEM_DEPTH=256*192;
+localparam MEM_DEPTH=256*240;
 
-logic [11:0] mem [0:MEM_DEPTH-1];       // 72 KB
+logic [11:0] mem [0:MEM_DEPTH-1];       // 90 KB
 logic [15:0] mem_portA_addr;
 logic [11:0] mem_portA_wdata;           // BGR444
 logic mem_portA_we;
@@ -88,13 +90,17 @@ end
 // 
 // Data input and initial background loading
 //
+// Active SMS lines in this frame (clk domain, for the write side and the
+// halt below; the pixel-domain copy is sms_lines_px). Game Gear keeps the
+// 192-line store: its 160x144 window lives inside lines 24..167.
+wire [8:0] sms_lines = gg ? 9'd192 : smode_m3 ? 9'd240 : smode_m1 ? 9'd224 : 9'd192;
 logic [8:0] x_r;
 logic [8:0] y_r;
 always @(posedge clk) begin
     x_r <= x;
     y_r <= y;
     mem_portA_we <= 1'b0;
-    if (ce_pix && y < 192 && x != 0 && x <= 256) begin  // the core outputs image from 1 to 256
+    if (ce_pix && y < sms_lines && x != 0 && x <= 256) begin  // the core outputs image from 1 to 256
         mem_portA_addr[15:8] <= y[7:0];
         mem_portA_addr[7:0] <= x[7:0] - 8'b1;
         mem_portA_wdata[11:0] <= color;
@@ -120,15 +126,14 @@ end
 // locks the stock clock: 858 would run the game faster than the machine
 // (no halt can speed it up) and 859 would run it slower than the original.
 //
-// Phase: the SMS waits at y 192 (the first vblank line in 192-line mode.
-// In the 224/240-line modes y 192 is inside the generated picture, but the
-// frame buffer stores only lines 0-191, so everything displayed is written
-// by then in every mode; all three NTSC modes are 262-line frames and the
-// read ages are identical, see sim/framelock) and runs again when HDMI
+// Phase: the SMS waits at the first vblank line (192 in 192-line mode,
+// 224/240 in the extended modes; Game Gear stays at 192): every displayed
+// line is written by then, and all three NTSC modes are 262-line frames, so
+// the lock rate is unchanged (see sim/framelock). It runs again when HDMI
 // reaches RELEASE_ROW in a lit frame. The
 // VDP then leads the HDMI read on every visible line (about 0.5 ms at the
-// tightest, the last SMS line 191; sim min age 27717 sys. Line 0 leads by
-// ~6.6 ms). The
+// tightest, the last displayed line; sim min age 27717 sys in 192-line mode.
+// Line 0 leads by ~6.6 ms). The
 // release is edge-triggered (one toggle per two HDMI frames over a
 // synchroniser) so a late arrival waits for the next pair and the phase is
 // exact every frame after at most two frames, including after reset, game
@@ -146,7 +151,6 @@ end
 // exempt from darkening, so the menu itself stays steady while the game
 // behind it keeps alternating. The swap only runs in modes 1-3 (mode 0
 // shows both frames lit, so there is no bias to cancel).
-localparam HALT_LINE = 192;         // VDP line at which to wait
 localparam RELEASE_ROW = 400;       // HDMI row whose start releases the SMS (lit frames)
 localparam BFI_SWAP_FRAMES = 1800;  // game frames between lit/inserted swaps (~30 s)
 
@@ -189,11 +193,10 @@ end
 // the difference (about 2 us) once per frame locks the SMS to exactly the
 // HDMI rate, 0.008 % fast, with a fixed phase.
 //
-// Phase: the SMS waits at y 192 (the first vblank line in 192-line mode.
-// In the 224/240-line modes y 192 is inside the generated picture, but the
-// frame buffer stores only lines 0-191, so everything displayed is written
-// by then in every mode; all three NTSC modes are 262-line frames and the
-// read ages are identical, see sim/framelock) and runs again when HDMI
+// Phase: the SMS waits at the first vblank line (192 in 192-line mode,
+// 224/240 in the extended modes; Game Gear stays at 192): every displayed
+// line is written by then, and all three NTSC modes are 262-line frames, so
+// the lock rate is unchanged (see sim/framelock). It runs again when HDMI
 // reaches RELEASE_ROW. The
 // VDP then leads the HDMI read on every visible line (about 1.8 ms at the
 // tightest, the top Game Gear line; 3.3 ms or more across the SMS picture). The
@@ -203,7 +206,6 @@ end
 // reload and menu pause. PAL frames (313 lines) are longer than the HDMI
 // frame, so the top level ignores the halt in PAL mode and PAL runs free
 // as before.
-localparam HALT_LINE = 192;         // VDP line at which to wait
 localparam RELEASE_ROW = 400;       // HDMI row whose start releases the SMS
 
 // HDMI side: one toggle per frame as cy passes RELEASE_ROW
@@ -216,7 +218,8 @@ always @(posedge clk_pixel) begin
 end
 `endif
 
-// SMS side: synchronise the toggle, then wait/release
+// SMS side: synchronise the toggle, then wait/release. The halt line is the
+// first vblank line (sms_lines above), so the last displayed line is written.
 reg [2:0] rel_sync = 3'b0;
 reg rel_lvl_q = 1'b0;
 wire rel_pulse = rel_sync[2] ^ rel_lvl_q;   // one clk per release (every HDMI frame; every two in hz120)
@@ -225,7 +228,7 @@ reg was_halt_line = 1'b0;
 always @(posedge clk) begin
     rel_sync <= {rel_sync[1:0], rel_tgl};
     rel_lvl_q <= rel_sync[2];
-    was_halt_line <= (y == HALT_LINE);
+    was_halt_line <= (y == sms_lines);
     if (!resetn) begin
         rel_sync <= 3'b0;
         rel_lvl_q <= 1'b0;
@@ -233,8 +236,8 @@ always @(posedge clk) begin
         was_halt_line <= 1'b0;
     end else if (rel_pulse && halt_req)
         halt_req <= 1'b0;                       // HDMI at the release row: run
-    else if ((y == HALT_LINE) && !was_halt_line)
-        halt_req <= 1'b1;                       // line 191 written: wait
+    else if ((y == sms_lines) && !was_halt_line)
+        halt_req <= 1'b1;                       // last displayed line written: wait
 end
 assign frame_halt = halt_req;
 
@@ -266,9 +269,11 @@ end
 //
 // Video
 `ifdef HZ120
-// Scale SMS image from 256x192 to 512x384 (4:3, exactly 2x) at Integer, to
-// 640x480 (4:3, 2.5x, the same aspect as the 60 Hz Full picture) at Full,
-// in the 720x480 frame
+// Scale the SMS image (256x192, or 256x224/256x240 in the extended modes) to
+// 512x384 (4:3, exactly 2x) at Integer, to 640x480 (4:3, 2.5x, the same
+// aspect as the 60 Hz Full picture) at Full, in the 720x480 frame. The
+// extended modes keep 2 rows per line at Integer (448 rows top 16, 480 rows
+// top 0); at Full the fractional step follows the active lines.
 // Scale overlay image from 256x224 to 640x480 without scanlines (as before at 720p)
 // In Game Gear mode, scale the 160x144 window (frame buffer 48..207, 24..167)
 // from the same image to 480x432 (10:9, exactly 3x) at Integer, to 533x480
@@ -279,7 +284,8 @@ end
 //
 `else
 // Video
-// Scale SMS image from 256x192 to 960x720
+// Scale the SMS image (256x192, or 256x224/256x240 in the extended modes) to
+// 768x576 at Integer (3 rows per line: top 72, 24, 0), to 960x720 at Full.
 // Scale overlay image from 256x224 to 960x720
 // In Game Gear mode, scale the 160x144 window (frame buffer 48..207, 24..167)
 // from the same image to 800x720 (10:9, exactly 5x)
@@ -289,7 +295,7 @@ end
 //
 `endif
 localparam WIDTH=256;
-localparam HEIGHT=224;
+localparam HEIGHT=240;      // tallest SMS picture (192/224/240); yy stays 8 bits
 localparam OV_LINES=224;      // lines of the overlay picture
 wire [23:0] rgb;            // actual RGB output
 reg [23:0] rgb_pre;         // before video_fx
@@ -304,13 +310,24 @@ reg [10:0] xcnt             ;
 reg [10:0] ycnt             ;                  // fractional scaling counters
 reg [9:0] cy_r;
 reg gg_r, gg_rr;                // gg synchronized to the pixel clock domain
+reg sm1_r, sm1_rr, sm3_r, sm3_rr; // smode bits synchronized the same way
 wire gg_mode = gg_rr & ~overlay;// scale the 160x144 GG window (overlay keeps full frame)
-wire [7:0] lines = overlay ? OV_LINES[7:0] : gg_mode ? 8'd144 : 8'd192;  // source lines in the picture
+wire [7:0] sms_lines_px = gg_rr ? 8'd192 : sm3_rr ? 8'd240 : sm1_rr ? 8'd224 : 8'd192;
+wire [7:0] lines = overlay ? OV_LINES[7:0] : gg_mode ? 8'd144 : sms_lines_px;  // source lines in the picture
 wire [31:0] vcfg_fx = gg_mode ? video_config : {video_config[31:16], 1'b0, video_config[14:0]};
 always @(posedge clk_pixel) begin // the LCD grid is Game Gear only: in SMS mode bit 15 is
     gg_r <= gg;             // cleared before video_fx, so the geometry never depends on it
     gg_rr <= gg_r;
+    sm1_r <= smode_m1;
+    sm1_rr <= sm1_r;
+    sm3_r <= smode_m3;
+    sm3_rr <= sm3_r;
 end
+`ifdef HZ120
+wire [9:0] sl_top = gg_mode ? 10'd24 : sms_lines_px == 8'd240 ? 10'd0 : sms_lines_px == 8'd224 ? 10'd16 : 10'd48;
+`else
+wire [9:0] sl_top = gg_mode ? 10'd0 : sms_lines_px == 8'd240 ? 10'd0 : sms_lines_px == 8'd224 ? 10'd24 : 10'd72;
+`endif
 
 // scanlines: sl_geom frames are scaled by a whole number of rows per source line.
 // The Game Gear window is already whole rows and columns per source pixel at
@@ -326,10 +343,10 @@ sl_rows sl (
     .cfg_grid(gg_mode & video_config[15]), .hide(overlay),
 `ifdef HZ120
     .rows(gg_mode ? 3'd3 : 3'd2), .dark_thin(3'd1), .dark_thick(gg_mode ? 3'd2 : 3'd1),
-    .lines(gg_mode ? 8'd144 : 8'd192), .top(gg_mode ? 10'd24 : 10'd48),
+    .lines(lines), .top(sl_top),
 `else
     .rows(gg_mode ? 3'd5 : 3'd3), .dark_thin(gg_mode ? 3'd2 : 3'd1), .dark_thick(gg_mode ? 3'd3 : 3'd2),
-    .lines(gg_mode ? 8'd144 : 8'd192), .top(gg_mode ? 10'd0 : 10'd72),
+    .lines(lines), .top(sl_top),
 `endif
     .geom(sl_geom), .pic_top(), .yy(sl_yy), .show(sl_show), .dark(sl_dark), .last(sl_last), .darkness(sl_dk)
 );
@@ -367,7 +384,7 @@ wire [11:0] XSTOP  = (12'd1280 + XSIZE) >> 1;
 // addressed on the previous clock was the last column of its source pixel) to rgb_pre.
 localparam FX_LAT = 11;     // clocks from rgb_pre to rgb, see video_fx.v
 wire [10:0] xstep = gg_mode ? 11'd160 : 11'd256;   // source px per output px
-wire [10:0] ystep = overlay ? 11'd224 : gg_mode ? 11'd144 : 11'd192;
+wire [10:0] ystep = overlay ? 11'd224 : gg_mode ? 11'd144 : sms_lines_px;
 always @(posedge clk_pixel) begin
     reg active_t;
     reg [10:0] xcnt_next;

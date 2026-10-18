@@ -3,8 +3,8 @@
 // reset, second pause over ~400 NTSC frames) and the checks. Mirrors
 // tb_frame_lock.v; this is the engine that makes 400+ frames affordable.
 // Configs (argv[2]): sms (192-line, default), sms224, sms240 (the VDP's
-// 224/240-line counter branches; sms2hdmi still stores only lines 0-191),
-// gg (Game Gear window). Optional argv[3] "short" quarters the scenario.
+// 224/240-line counter branches; sms2hdmi stores and halts the full active
+// height), gg (Game Gear window). Optional argv[3] "short" quarters the scenario.
 //
 // The hz120 variant soaks the 480p120 BFI timing at full scale: every game
 // frame must be read twice (lit pass, then inserted pass), each pass from a
@@ -102,15 +102,15 @@ int main(int argc, char **argv) {
     int64_t now = 0, sys_edge = 0;
     auto eval = [&]() { t->eval(); };
 
-    int64_t wr_last[192], wr_prev[192];
+    int64_t wr_last[240], wr_prev[240];
 #ifdef HZ120
-    int wr_frame[192];
-    for (int i = 0; i < 192; i++) wr_last[i] = wr_prev[i] = 0, wr_frame[i] = -1;
+    int wr_frame[240];
+    for (int i = 0; i < 240; i++) wr_last[i] = wr_prev[i] = 0, wr_frame[i] = -1;
     int game_wr = 0;                 // game frame currently being written
     int pass_fmin = 0, pass_fmax = -1, pass_ins = 0, last_lit = -1;
     int lit_nonzero = 0, ins_nonzero = 0, stale_in_frame = 0;
 #else
-    for (int i = 0; i < 192; i++) wr_last[i] = wr_prev[i] = 0;
+    for (int i = 0; i < 240; i++) wr_last[i] = wr_prev[i] = 0;
 #endif
 
     // scenario, counted in VDP frames (y==192 entries with the model running)
@@ -150,13 +150,13 @@ int main(int argc, char **argv) {
 #endif
     eval();
 #ifdef HZ120
-    LOG("config %s: gg=%d m1=%d m3=%d bfi=%d, VDP active lines %d, halt at y=192 (%s)",
+    LOG("config %s: gg=%d m1=%d m3=%d bfi=%d, VDP active lines %d, halt at y=%d",
         cfg.c_str(), gg_in, mode_m1, mode_m3, bfi, active_lines,
-        active_lines <= 192 ? "in vblank" : "inside the active picture");
+        gg_in ? 192 : mode_m3 ? 240 : mode_m1 ? 224 : 192);
 #else
-    LOG("config %s: gg=%d m1=%d m3=%d, VDP active lines %d, halt at y=192 (%s)",
+    LOG("config %s: gg=%d m1=%d m3=%d, VDP active lines %d, halt at y=%d",
         cfg.c_str(), gg_in, mode_m1, mode_m3, active_lines,
-        active_lines <= 192 ? "in vblank" : "inside the active picture");
+        gg_in ? 192 : mode_m3 ? 240 : mode_m1 ? 224 : 192);
 #endif
 
     while (sys_edge < E_CAP) {
@@ -267,9 +267,9 @@ int main(int argc, char **argv) {
             if (t->memA_we) {
                 int ln = (t->memA_addr >> 8) & 0xffff;
 #ifdef HZ120
-                if (ln >= 0 && ln < 192) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; wr_frame[ln] = game_wr; }
+                if (ln >= 0 && ln < 240) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; wr_frame[ln] = game_wr; }
 #else
-                if (ln >= 0 && ln < 192) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; }
+                if (ln >= 0 && ln < 240) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; }
 #endif
             }
         }
@@ -338,7 +338,7 @@ int main(int argc, char **argv) {
             if (rd != rd_q) {
                 rd_q = rd;
 #ifdef HZ120
-                if (rd >= 0 && rd < 192 && locked && pic_row) {
+                if (rd >= 0 && rd < 240 && locked && pic_row) {
                     int64_t w = (wr_last[rd] > 0 && wr_last[rd] < sys_edge) ? wr_last[rd] : wr_prev[rd];
                     int64_t age = (w > 0) ? sys_edge - w : INT64_MAX;
                     if (age < frame_min_age) frame_min_age = age;
@@ -356,7 +356,7 @@ int main(int argc, char **argv) {
                     }
                 }
 #else
-                if (rd >= 0 && rd < 192 && locked && wr_last[rd]) {
+                if (rd >= 0 && rd < 240 && locked && wr_last[rd]) {
                     int64_t age = sys_edge - wr_last[rd];
                     if (age < 0) age = sys_edge - wr_prev[rd];
                     if (age < frame_min_age) frame_min_age = age;

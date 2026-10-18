@@ -61,10 +61,10 @@ module tb_frame_lock;
         .overlay_color(15'd0),
         .scanlines(1'b1), .sl_darkness(2'd1), .sl_thick(1'b0), .sl_out(1'b0),
 `ifdef HZ120
-        .video_config({10'b0, 2'd`BFI_MODE, 20'b0}), .gg(1'b0),
+        .video_config({10'b0, 2'd`BFI_MODE, 20'b0}), .gg(1'b0), .smode_m1(1'b0), .smode_m3(1'b0),
         .frame_halt(frame_halt), .std_timing(1'b0), .bfi_mode(2'd`BFI_MODE),
 `else
-        .video_config(32'd0), .gg(1'b0),
+        .video_config(32'd0), .gg(1'b0), .smode_m1(1'b0), .smode_m3(1'b0),
         .frame_halt(frame_halt), .std_timing(1'b0),
 `endif
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),
