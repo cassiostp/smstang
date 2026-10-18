@@ -154,6 +154,16 @@ end
 localparam RELEASE_ROW = 400;       // HDMI row whose start releases the SMS (lit frames)
 localparam BFI_SWAP_FRAMES = 1800;  // game frames between lit/inserted swaps (~30 s)
 
+// 240-line mode releases ~60 rows later (row 460): its visible writes start
+// only 22 vblank lines after release, so at row 400 the inserted pass would
+// straddle the write front (reads outrun it 1710 sys/line vs 3420) and tear
+// at line ~19 every inserted frame (sim-measured: mixed write tags, min read
+// age ~3 sys). The later release splits the structural margin about evenly
+// (~19k sys both sides: inserted reads all stale, lit reads keep their
+// lead). 192/224/GG keep row 400 (their margins are unchanged). sms_lines_px
+// is driven in the video section below; the mode is stable per game.
+wire [9:0] release_row = (sms_lines_px == 8'd240) ? 10'd460 : RELEASE_ROW;
+
 // HDMI frame parity (toggles every frame) and the BFI phase: the inserted
 // (darkened) frame is bfi_ins ^ bfi_phase, while releases stay on lit
 // frames so the game timing never shifts at a swap.
@@ -173,8 +183,8 @@ always @(posedge clk_pixel) begin
             bfi_swap_pending <= 1'b0;
         end
     end
-    at_rel_q <= (cy == RELEASE_ROW);
-    if ((cy == RELEASE_ROW) && !at_rel_q && !bfi_ins) begin
+    at_rel_q <= (cy == release_row);
+    if ((cy == release_row) && !at_rel_q && !bfi_ins) begin
         rel_tgl <= ~rel_tgl;
         if (bfi_mode != 2'd0 && bfi_swap_cnt == BFI_SWAP_FRAMES - 1) begin
             bfi_swap_cnt <= 16'd0;

@@ -37,7 +37,14 @@ static const int64_t RATE_LO = 449160;   // sys edges per HDMI frame
 static const int64_t RATE_HI = 449173;
 static const int64_t MAX_AGE = 860000;   // reads must be this VDP frame's or the
                                          // previous one's data (inserted pass
-                                         // lags one game frame: oldest ~805k)
+                                         // lags one game frame: oldest ~805k
+                                         // in 192-line mode)
+static const int64_t MAX_AGE_TALL = 880000; // same for 224/240-line modes: the
+                                         // taller frames start writing earlier
+                                         // relative to the locked halt, so the
+                                         // oldest line is older at read
+                                         // (measured 871660/874192, still < a
+                                         // frame period; passes are single-frame)
 static const int64_t STALE = 900000;     // older than a game frame: stale
 #else
 static const int64_t WAIT_LO = 80;       // steady waits stay in 80..140 sys
@@ -119,6 +126,9 @@ int main(int argc, char **argv) {
     int64_t frozen_until = 0;
     bool por_n = false, pause_tb = false;
     bool prev192 = false;
+#ifdef HZ120
+    bool prevHalt = false;
+#endif
 
 #ifdef HZ120
     int locked = 0, forgive = 1, violations = 0;
@@ -173,8 +183,15 @@ int main(int argc, char **argv) {
             if (phase == 0 && !por_n && sys_edge > 50) { por_n = true; }
             bool is192 = (t->y == 192);
 #ifdef HZ120
+            // write-frame tags flip at the halt line (the frame's writes are
+            // complete there): y==192 is mid-picture in 224/240 modes.
+            int halt_line = gg_in ? 192 : mode_m3 ? 240 : mode_m1 ? 224 : 192;
+            bool isHalt = (t->y == halt_line);
+            if (isHalt && !prevHalt) game_wr++;
+            prevHalt = isHalt;
             if (is192 && !prev192) {
-                game_wr++;           // writes from here belong to the next game frame
+                // scenario pacing still counts y==192 entries (once per
+                // frame in every mode)
                 if (!pause_tb && por_n) {
                     frames_in_phase++;
                     vdp_frames++;
@@ -291,7 +308,9 @@ int main(int argc, char **argv) {
                     if (len < RATE_LO || len > RATE_HI) { LOG("FAIL: hdmi frame %d len %lld sys", frame_idx, (long long)len); violations++; }
                     if (locked) {
 #ifdef HZ120
-                        if (frame_idx % 50 == 0 || frame_max_age > MAX_AGE || frame_min_age == INT64_MAX)
+                        // taller modes read older lines (see MAX_AGE_TALL)
+                        int64_t max_age_bound = ((mode_m1 || mode_m3) && !gg_in) ? MAX_AGE_TALL : MAX_AGE;
+                        if (frame_idx % 50 == 0 || frame_max_age > max_age_bound || frame_min_age == INT64_MAX)
                             LOG("hdmi frame %d: ins=%d game=%d..%d min_age=%lld max_age=%lld wait=%lld", frame_idx, pass_ins, pass_fmin, pass_fmax, (long long)frame_min_age, (long long)frame_max_age, (long long)last_wait);
                         // settled: the phase is exact again at most two game
                         // frames (four HDMI frames) after any event
@@ -306,7 +325,7 @@ int main(int argc, char **argv) {
                             }
                             if (visual && pass_ins && ins_nonzero) { LOG("FAIL: %d non-black centre samples in inserted hdmi frame %d", ins_nonzero, frame_idx); violations++; }
                             if (visual && !pass_ins && !lit_nonzero) { LOG("FAIL: lit hdmi frame %d all black at centre", frame_idx); violations++; }
-                            if (frame_max_age > MAX_AGE) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
+                            if (frame_max_age > max_age_bound) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
                             if (stale_in_frame) { LOG("FAIL: %d stale reads in frame %d", stale_in_frame, frame_idx); violations++; }
                         }
 #else
