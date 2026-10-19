@@ -25,14 +25,16 @@ cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)
 RTL=../../src
 SCN=../scanlines
+# Runner: simrun when present (persistent ccache + full-core env), else plain docker.
+DOCKER_RUN=${DOCKER_RUN:-$(command -v simrun >/dev/null 2>&1 && echo simrun || echo "docker run --rm")};
 for V in $VARIANTS; do
 if [ "$V" = hz120 ]; then
   echo "--- framelock ($V, 480p120)"
 else
   echo "--- framelock ($V, 720p)"
 fi
-IV="docker run --rm --name hz120vsms_lockiv_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/framelock tangcore-iv:1"
-VLT="docker run --rm --name hz120vsms_lockvlt_$V --user $(id -u):$(id -g) -v $PWD:/w -v $ROOT:/r -w /w verilator/verilator:latest"
+IV="$DOCKER_RUN --name ${SIM_PREFIX:-sim$$}_hz120vsms_lockiv_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/framelock tangcore-iv:1"
+VLT="$DOCKER_RUN --name ${SIM_PREFIX:-sim$$}_hz120vsms_lockvlt_$V --user $(id -u):$(id -g) -v $PWD:/w -v $ROOT:/r -w /w verilator/verilator:latest"
 # (verilator resolves file arguments against -Mdir, so absolute paths)
 VSRC=/r/src
 VSCN=/r/sim/scanlines
@@ -51,12 +53,12 @@ fi
 mkdir -p build
 # the real hdmi.sv counting in both modes (DVI: same counters, no audio
 # packet logic, which neither iverilog nor this Verilator can elaborate)
-VLT_HDMI="docker run --rm --name hz120vsms_lockvhdmi_$V --user $(id -u):$(id -g) -v $PWD:/w -v $ROOT:/r -w /w verilator/verilator:latest"
+VLT_HDMI="$DOCKER_RUN --name ${SIM_PREFIX:-sim$$}_hz120vsms_lockvhdmi_$V --user $(id -u):$(id -g) -v $PWD:/w -v $ROOT:/r -w /w verilator/verilator:latest"
 $VLT_HDMI --binary --timing -j 20 --top-module tb_hdmi_native -Mdir build/hdminat_$V \
   -Wno-PINMISSING -Wno-IMPLICIT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-CASEINCOMPLETE -Wno-UNUSEDSIGNAL -Wno-UNDRIVEN -Wno-COMBDLY -Wno-ALWCOMBORDER \
   $VINC /w/tb_hdmi_native.v /w/gowin_stubs.v /r/src/hdmi2/hdmi.sv /r/src/hdmi2/serializer.sv /r/src/hdmi2/tmds_channel.sv \
   > build/hdminat_$V.log 2>&1
-docker run --rm --name hz120vsms_lockvh_$V --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w --entrypoint ./build/hdminat_$V/Vtb_hdmi_native verilator/verilator:latest \
+$DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockvh_$V" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w --entrypoint ./build/hdminat_$V/Vtb_hdmi_native verilator/verilator:latest \
   >> build/hdminat_$V.log 2>&1
 grep -q "tb_hdmi_native: PASS" build/hdminat_$V.log
 
@@ -70,29 +72,29 @@ $VLT --cc --top-module fl_top --prefix Vfl_top -Mdir build/obj_$V -CFLAGS "$CFLA
   $VINC /w/fl_top.sv /w/sms_frame_model.v $VSRC/sms2hdmi.sv $VSCN/hdmi_stub.v $VSRC/scanlines.v $VSRC/video_fx.v \
   --exe /w/tb_frame_lock.cpp > build/verilate_$V.log 2>&1 || { cat build/verilate_$V.log; exit 1; }
 if grep -E "fl_top|tb_frame_lock|sms_frame_model" build/verilate_$V.log; then echo "new warnings in sim files:"; cat build/verilate_$V.log; exit 1; fi
-docker run --rm --name hz120vsms_lockmake_$V --user "$(id -u):$(id -g)" -v "$PWD:/w" -v "$ROOT:/r" -w /w --entrypoint make verilator/verilator:latest \
+$DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockmake_$V" --user "$(id -u):$(id -g)" -v "$PWD:/w" -v "$ROOT:/r" -w /w --entrypoint make verilator/verilator:latest \
   -C build/obj_$V -f Vfl_top.mk -j20 > build/make_$V.log 2>&1 || { tail -30 build/make_$V.log; exit 1; }
 if [ "$V" = hz120 ]; then
 # 138K-only: the hz120 variant's sys PLL (50*28/26) cannot lock a 60K-style rate;
 # the 120 Hz bitstream is console138k-only, like the NES 480p120 reference.
 # Logs land in build/hz120/ (the harness writes tb_<tag>.log next to itself).
 mkdir -p build/hz120
-docker run --rm --name hz120vsms_locksms --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build/hz120 --entrypoint ../obj_hz120/Vfl_top verilator/verilator:latest \
+$DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_locksms" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build/hz120 --entrypoint ../obj_hz120/Vfl_top verilator/verilator:latest \
   sms || { tail -20 build/hz120/tb_sms.log; exit 1; };
 grep -q "^tb_frame_lock: PASS" build/hz120/tb_sms.log
 for cfg in sms224 sms240 gg; do
-  docker run --rm --name hz120vsms_lock_$cfg --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build/hz120 --entrypoint ../obj_hz120/Vfl_top verilator/verilator:latest \
+  $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lock_$cfg" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build/hz120 --entrypoint ../obj_hz120/Vfl_top verilator/verilator:latest \
     $cfg $cfg short || { tail -20 build/hz120/tb_$cfg.log; exit 1; }
   grep -q "^tb_frame_lock: PASS" build/hz120/tb_$cfg.log
 done
 else
 # both boards share the 50 MHz crystal and the same PLL dividers, so one
 # clock config covers console138k and console60k
-docker run --rm --name hz120vsms_lockrun --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build --entrypoint ./obj_standard/Vfl_top verilator/verilator:latest \
+$DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockrun" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build --entrypoint ./obj_standard/Vfl_top verilator/verilator:latest \
   sms || { tail -20 build/tb_sms.log; exit 1; };
 grep -q "^tb_frame_lock: PASS" build/tb_sms.log
 for cfg in sms224 sms240 gg; do
-  docker run --rm --name hz120vsms_lockrun_$cfg --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build --entrypoint ./obj_standard/Vfl_top verilator/verilator:latest \
+  $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockrun_$cfg" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build --entrypoint ./obj_standard/Vfl_top verilator/verilator:latest \
     $cfg $cfg short || { tail -20 build/tb_$cfg.log; exit 1; }
   grep -q "^tb_frame_lock: PASS" build/tb_$cfg.log
 done

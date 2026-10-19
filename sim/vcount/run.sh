@@ -6,5 +6,7 @@
 set -e
 cd "$(dirname "$0")"
 RTL=../../src
-IV="docker run --rm --name r6smsmd_vcount --user $(id -u):$(id -g) -v $PWD:/w -v $RTL:/r:ro -w /w tangcore-iv:1"
+# Runner: simrun when present (persistent ccache + full-core env), else plain docker.
+DOCKER_RUN=${DOCKER_RUN:-$(command -v simrun >/dev/null 2>&1 && echo simrun || echo "docker run --rm")};
+IV="$DOCKER_RUN --name ${SIM_PREFIX:-sim$$}_r6smsmd_vcount --user $(id -u):$(id -g) -v $PWD:/w -v $RTL:/r:ro -w /w tangcore-iv:1"
 $IV sh -c "iverilog -g2012 -o tb_vcount.out tb_vcount.v /r/video.v && vvp tb_vcount.out"

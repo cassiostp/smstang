@@ -50,6 +50,11 @@ and releases the SMS on lit frames only; `video_config[21:20]` selects the BFI m
 
 ## Simulations (`sim/cosim/README.md` and `sim/video_fx/README.md` say how to run; iverilog in `tangcore-iv:1`)
 
+Sim scripts use `simrun` when it is on PATH (else `docker run --rm`);
+set `SIM_PREFIX` to namespace container names when sharing the machine.
+`simrun` is an optional local helper (persistent ccache + full-core env),
+not part of the repositories.
+
 The `scanlines`, `framelock` and `video_fx` benches take `[standard|hz120|both]`
 (default both); each leg compiles the RTL with its own `src/variant/<variant>`.
 `hz120` runs the 480p120 lock (releases on lit frames, BFI modes 0/1/2 in the

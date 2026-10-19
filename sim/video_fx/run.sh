@@ -26,13 +26,15 @@ cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)
 RTL=../../src
 HDMI=../scanlines/hdmi_stub.v
+# Runner: simrun when present (persistent ccache + full-core env), else plain docker.
+DOCKER_RUN=${DOCKER_RUN:-$(command -v simrun >/dev/null 2>&1 && echo simrun || echo "docker run --rm")};
 if command -v python3 >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
     sh prep.sh
 fi
 test -f vec_case.hex -a -f build/sms2hdmi_base.sv -a -f build/sms2hdmi_fx.sv
 
 for V in $VARIANTS; do
-IV="docker run --rm --name hz120vsms_fx_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/video_fx tangcore-iv:1"
+IV="$DOCKER_RUN --name ${SIM_PREFIX:-sim$$}_hz120vsms_fx_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/video_fx tangcore-iv:1"
 INC="-I $RTL/variant/$V"
 if [ "$V" = hz120 ]; then
   echo "--- video_fx ($V, 480p120)"

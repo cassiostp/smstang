@@ -15,8 +15,10 @@ esac
 cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)
 RTL=../../src
+# Runner: simrun when present (persistent ccache + full-core env), else plain docker.
+DOCKER_RUN=${DOCKER_RUN:-$(command -v simrun >/dev/null 2>&1 && echo simrun || echo "docker run --rm")};
 for V in $VARIANTS; do
-  IV="docker run --rm --name hz120vsms_scn_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/scanlines tangcore-iv:1"
+  IV="$DOCKER_RUN --name ${SIM_PREFIX:-sim$$}_hz120vsms_scn_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/scanlines tangcore-iv:1"
   INC="-I $RTL/variant/$V"
   if [ "$V" = hz120 ]; then
     echo "--- scanlines ($V, 480p120)"
