@@ -17,8 +17,8 @@ module fl_top (
     input por_n,            // DUT resetn: power-on plus game-reload pulses
     input pause_tb,         // core_config[17] equivalent (menu pause)
     input gg_in,            // 1: Game Gear mode (160x144 window)
-    input mode_m1,          // 1: 224-line mode (counter model only; sms2hdmi has no mode input)
-    input mode_m3,          // 1: 240-line mode (counter model only)
+    input mode_m1,          // 1: 224-line mode (counter model and sms2hdmi)
+    input mode_m3,          // 1: 240-line mode (counter model and sms2hdmi)
 `ifdef HZ120
     input [1:0] bfi_mode,   // video_config[21:20]: 0 off, 1 black, 2 dim, 3 black
 `endif
@@ -67,11 +67,11 @@ module fl_top (
         .scanlines(1'b0), .sl_darkness(2'd0), .sl_thick(1'b0),
 `ifdef HZ120
         .sl_out(1'b1),
-        .video_config(32'd0), .gg(gg_in),
+        .video_config(32'd0), .gg(gg_in), .smode_m1(mode_m1), .smode_m3(mode_m3),
         .frame_halt(frame_halt), .std_timing(1'b0), .bfi_mode(bfi_mode),
 `else
         .sl_out(1'b0),
-        .video_config(32'd0), .gg(gg_in),
+        .video_config(32'd0), .gg(gg_in), .smode_m1(mode_m1), .smode_m3(mode_m3),
         .frame_halt(frame_halt), .std_timing(1'b0),
 `endif
         .clk_pixel(clk_pixel), .clk_5x_pixel(1'b0),

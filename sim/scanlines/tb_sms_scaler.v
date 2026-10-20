@@ -36,7 +36,7 @@ module tb_sms_scaler;
         .overlay(ov), .overlay_x(overlay_x), .overlay_y(overlay_y), .overlay_color(overlay_color),
         .scanlines(sl_on), .sl_darkness(sl_dark), .sl_thick(sl_thick), .sl_out(sl_out),
         .video_config(32'd0),
-        .gg(gg),
+        .gg(gg), .smode_m1(1'b0), .smode_m3(1'b0),
 `ifdef HZ120
         .frame_halt(frame_halt), .std_timing(1'b0), .bfi_mode(2'd0),
 `endif

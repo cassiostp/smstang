@@ -3,8 +3,8 @@
 // reset, second pause over ~400 NTSC frames) and the checks. Mirrors
 // tb_frame_lock.v; this is the engine that makes 400+ frames affordable.
 // Configs (argv[2]): sms (192-line, default), sms224, sms240 (the VDP's
-// 224/240-line counter branches; sms2hdmi still stores only lines 0-191),
-// gg (Game Gear window). Optional argv[3] "short" quarters the scenario.
+// 224/240-line counter branches; sms2hdmi stores and halts the full active
+// height), gg (Game Gear window). Optional argv[3] "short" quarters the scenario.
 //
 // The hz120 variant soaks the 480p120 BFI timing at full scale: every game
 // frame must be read twice (lit pass, then inserted pass), each pass from a
@@ -37,7 +37,14 @@ static const int64_t RATE_LO = 449160;   // sys edges per HDMI frame
 static const int64_t RATE_HI = 449173;
 static const int64_t MAX_AGE = 860000;   // reads must be this VDP frame's or the
                                          // previous one's data (inserted pass
-                                         // lags one game frame: oldest ~805k)
+                                         // lags one game frame: oldest ~805k
+                                         // in 192-line mode)
+static const int64_t MAX_AGE_TALL = 880000; // same for 224/240-line modes: the
+                                         // taller frames start writing earlier
+                                         // relative to the locked halt, so the
+                                         // oldest line is older at read
+                                         // (measured 871660/874192, still < a
+                                         // frame period; passes are single-frame)
 static const int64_t STALE = 900000;     // older than a game frame: stale
 #else
 static const int64_t WAIT_LO = 80;       // steady waits stay in 80..140 sys
@@ -102,15 +109,15 @@ int main(int argc, char **argv) {
     int64_t now = 0, sys_edge = 0;
     auto eval = [&]() { t->eval(); };
 
-    int64_t wr_last[192], wr_prev[192];
+    int64_t wr_last[240], wr_prev[240];
 #ifdef HZ120
-    int wr_frame[192];
-    for (int i = 0; i < 192; i++) wr_last[i] = wr_prev[i] = 0, wr_frame[i] = -1;
+    int wr_frame[240];
+    for (int i = 0; i < 240; i++) wr_last[i] = wr_prev[i] = 0, wr_frame[i] = -1;
     int game_wr = 0;                 // game frame currently being written
     int pass_fmin = 0, pass_fmax = -1, pass_ins = 0, last_lit = -1;
     int lit_nonzero = 0, ins_nonzero = 0, stale_in_frame = 0;
 #else
-    for (int i = 0; i < 192; i++) wr_last[i] = wr_prev[i] = 0;
+    for (int i = 0; i < 240; i++) wr_last[i] = wr_prev[i] = 0;
 #endif
 
     // scenario, counted in VDP frames (y==192 entries with the model running)
@@ -119,6 +126,9 @@ int main(int argc, char **argv) {
     int64_t frozen_until = 0;
     bool por_n = false, pause_tb = false;
     bool prev192 = false;
+#ifdef HZ120
+    bool prevHalt = false;
+#endif
 
 #ifdef HZ120
     int locked = 0, forgive = 1, violations = 0;
@@ -150,13 +160,13 @@ int main(int argc, char **argv) {
 #endif
     eval();
 #ifdef HZ120
-    LOG("config %s: gg=%d m1=%d m3=%d bfi=%d, VDP active lines %d, halt at y=192 (%s)",
+    LOG("config %s: gg=%d m1=%d m3=%d bfi=%d, VDP active lines %d, halt at y=%d",
         cfg.c_str(), gg_in, mode_m1, mode_m3, bfi, active_lines,
-        active_lines <= 192 ? "in vblank" : "inside the active picture");
+        gg_in ? 192 : mode_m3 ? 240 : mode_m1 ? 224 : 192);
 #else
-    LOG("config %s: gg=%d m1=%d m3=%d, VDP active lines %d, halt at y=192 (%s)",
+    LOG("config %s: gg=%d m1=%d m3=%d, VDP active lines %d, halt at y=%d",
         cfg.c_str(), gg_in, mode_m1, mode_m3, active_lines,
-        active_lines <= 192 ? "in vblank" : "inside the active picture");
+        gg_in ? 192 : mode_m3 ? 240 : mode_m1 ? 224 : 192);
 #endif
 
     while (sys_edge < E_CAP) {
@@ -173,8 +183,15 @@ int main(int argc, char **argv) {
             if (phase == 0 && !por_n && sys_edge > 50) { por_n = true; }
             bool is192 = (t->y == 192);
 #ifdef HZ120
+            // write-frame tags flip at the halt line (the frame's writes are
+            // complete there): y==192 is mid-picture in 224/240 modes.
+            int halt_line = gg_in ? 192 : mode_m3 ? 240 : mode_m1 ? 224 : 192;
+            bool isHalt = (t->y == halt_line);
+            if (isHalt && !prevHalt) game_wr++;
+            prevHalt = isHalt;
             if (is192 && !prev192) {
-                game_wr++;           // writes from here belong to the next game frame
+                // scenario pacing still counts y==192 entries (once per
+                // frame in every mode)
                 if (!pause_tb && por_n) {
                     frames_in_phase++;
                     vdp_frames++;
@@ -267,9 +284,9 @@ int main(int argc, char **argv) {
             if (t->memA_we) {
                 int ln = (t->memA_addr >> 8) & 0xffff;
 #ifdef HZ120
-                if (ln >= 0 && ln < 192) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; wr_frame[ln] = game_wr; }
+                if (ln >= 0 && ln < 240) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; wr_frame[ln] = game_wr; }
 #else
-                if (ln >= 0 && ln < 192) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; }
+                if (ln >= 0 && ln < 240) { wr_prev[ln] = wr_last[ln]; wr_last[ln] = sys_edge; }
 #endif
             }
         }
@@ -291,7 +308,9 @@ int main(int argc, char **argv) {
                     if (len < RATE_LO || len > RATE_HI) { LOG("FAIL: hdmi frame %d len %lld sys", frame_idx, (long long)len); violations++; }
                     if (locked) {
 #ifdef HZ120
-                        if (frame_idx % 50 == 0 || frame_max_age > MAX_AGE || frame_min_age == INT64_MAX)
+                        // taller modes read older lines (see MAX_AGE_TALL)
+                        int64_t max_age_bound = ((mode_m1 || mode_m3) && !gg_in) ? MAX_AGE_TALL : MAX_AGE;
+                        if (frame_idx % 50 == 0 || frame_max_age > max_age_bound || frame_min_age == INT64_MAX)
                             LOG("hdmi frame %d: ins=%d game=%d..%d min_age=%lld max_age=%lld wait=%lld", frame_idx, pass_ins, pass_fmin, pass_fmax, (long long)frame_min_age, (long long)frame_max_age, (long long)last_wait);
                         // settled: the phase is exact again at most two game
                         // frames (four HDMI frames) after any event
@@ -306,7 +325,7 @@ int main(int argc, char **argv) {
                             }
                             if (visual && pass_ins && ins_nonzero) { LOG("FAIL: %d non-black centre samples in inserted hdmi frame %d", ins_nonzero, frame_idx); violations++; }
                             if (visual && !pass_ins && !lit_nonzero) { LOG("FAIL: lit hdmi frame %d all black at centre", frame_idx); violations++; }
-                            if (frame_max_age > MAX_AGE) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
+                            if (frame_max_age > max_age_bound) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
                             if (stale_in_frame) { LOG("FAIL: %d stale reads in frame %d", stale_in_frame, frame_idx); violations++; }
                         }
 #else
@@ -338,7 +357,7 @@ int main(int argc, char **argv) {
             if (rd != rd_q) {
                 rd_q = rd;
 #ifdef HZ120
-                if (rd >= 0 && rd < 192 && locked && pic_row) {
+                if (rd >= 0 && rd < 240 && locked && pic_row) {
                     int64_t w = (wr_last[rd] > 0 && wr_last[rd] < sys_edge) ? wr_last[rd] : wr_prev[rd];
                     int64_t age = (w > 0) ? sys_edge - w : INT64_MAX;
                     if (age < frame_min_age) frame_min_age = age;
@@ -356,7 +375,7 @@ int main(int argc, char **argv) {
                     }
                 }
 #else
-                if (rd >= 0 && rd < 192 && locked && wr_last[rd]) {
+                if (rd >= 0 && rd < 240 && locked && wr_last[rd]) {
                     int64_t age = sys_edge - wr_last[rd];
                     if (age < 0) age = sys_edge - wr_prev[rd];
                     if (age < frame_min_age) frame_min_age = age;
