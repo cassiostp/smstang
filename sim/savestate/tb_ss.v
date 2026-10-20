@@ -79,6 +79,7 @@ wire HS, VS;
 
 // ---- savestate engine wires ----
 wire ss_freeze, ss_reset, ss_loaded, ss_active;
+wire ss_ram_own = ss_active && ss_freeze; // engine owns bulk RAMs only while frozen (see smstang_top)
 wire ss_snd_rst;
 wire [9:0] ss_a;
 wire [7:0] ss_din;
@@ -151,7 +152,7 @@ system #(63) sys (
    .ROMCL(1'b0), .ROMAD(25'b0), .ROMDT(8'b0), .ROMEN(1'b0),
    .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_dout_sys),
    .ss_point(ss_point), .ss_supported(ss_supported), .VBlank(VBlank),
-   .ss_active_sys(ss_active), .ss_vram_a(ss_mem_ad[13:0]),
+   .ss_active_sys(ss_ram_own), .ss_vram_a(ss_mem_ad[13:0]),
    .ss_snd_rst(ss_snd_rst),
    .ss_vram_we(ss_active && (ss_mem_sel == 2'd0) && ss_mem_we),
    .ss_vram_d(ss_mem_din), .ss_vram_q(ss_vram_q)
@@ -195,16 +196,16 @@ assign ss_mem_ack = ss_ack_s[2];
 // ---- memories ----
 spram #(.widthad_a(14)) wram (
    .clock(clk_sys),
-   .address(ss_active ? ((ss_mem_sel == 2'd1) ? {1'b0, ss_mem_ad[12:0]} : 14'b0) : {1'b0, ram_a[12:0]}),
-   .wren(ss_active ? ((ss_mem_sel == 2'd1) & ss_mem_we) : ram_we),
-   .data(ss_active ? ss_mem_din : ram_d),
+   .address(ss_ram_own ? ((ss_mem_sel == 2'd1) ? {1'b0, ss_mem_ad[12:0]} : 14'b0) : {1'b0, ram_a[12:0]}),
+   .wren(ss_ram_own ? ((ss_mem_sel == 2'd1) & ss_mem_we) : ram_we),
+   .data(ss_ram_own ? ss_mem_din : ram_d),
    .q(ram_q)
 );
 dpram #(.widthad_a(15)) nvram (
    .clock_a(clk_sys),
-   .address_a(ss_active ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : nvram_a),
-   .wren_a(ss_active ? ((ss_mem_sel == 2'd2) & ss_mem_we) : nvram_we),
-   .data_a(ss_active ? ss_mem_din : nvram_d),
+   .address_a(ss_ram_own ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : nvram_a),
+   .wren_a(ss_ram_own ? ((ss_mem_sel == 2'd2) & ss_mem_we) : nvram_we),
+   .data_a(ss_ram_own ? ss_mem_din : nvram_d),
    .q_a(nvram_q),
    .clock_b(clk_sys), .address_b(15'b0), .wren_b(1'b0), .data_b(8'b0), .q_b()
 );
