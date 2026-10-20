@@ -1,3 +1,0 @@
-WARNING: ../../src/dpram.v:21: Excess hex digits (30 of 'f331f0dfc30001000000000000000000') while reading 8-bit words.
-WARNING: ../../src/dpram.v:21: $readmemh(prog.hex): Not enough words in the file for the requested range [0:32767].
-tb_ss: start

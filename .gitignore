@@ -3,3 +3,7 @@ sim/cosim/build/
 
 # usb_hid_host microcode listing
 src/usb_hid_host_firmware/ukp.lst
+# savestate bench outputs (regen via run.sh)
+sim/savestate/build/
+sim/savestate/prog.hex
+sim/savestate/mboot.hex
