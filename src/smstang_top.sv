@@ -283,7 +283,7 @@ system #(63) system
 	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp_g),
 	.ce_pix(ce_pix_g), .ce_sp(ce_sp_g), .turbo(turbo),
 	.gg(gg), .ggres(ggres), .systeme(systeme),
-	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~(reset | ss_reset)),
+	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~reset),
 
 	.GG_RESET(/*ioctl_download && ioctl_wr && !ioctl_addr*/), .GG_EN(status[24]), .GG_CODE(/*gg_code*/),
 	.GG_AVAIL(/*gg_avail*/),
@@ -554,8 +554,10 @@ wire overlay = 1'b0;
 `endif
 
 reg rom_loading_r;
+reg ss_reset_r = 0;
 always @(posedge clk_sys) begin
     rom_loading_r <= rom_loading;
+    ss_reset_r <= ss_reset;
 	if(!rom_loading_r && rom_loading) begin     // download start, reset system
         loading_addr_next <= 0;
         reset <= 1;
@@ -563,6 +565,12 @@ always @(posedge clk_sys) begin
     if (rom_loading_r && !rom_loading) begin    // download complete, start system
         reset <= 0;
     end
+    // Savestate load reset (see savestate_sms S_RESET): set on ss_reset,
+    // release on its falling edge (covers OP_ABORT too). Restores run in
+    // S_LOAD after release. Unrelated to ROM loading above (SS ops never
+    // run mid-load).
+    if (ss_reset) reset <= 1;
+    else if (ss_reset_r && !ss_reset) reset <= 0;
     if (rom_loading && rom_do_valid) begin      // write a byte to SDRAM
         loading_addr_next <= loading_addr_next + 1'd1;
         loading_addr <= loading_addr_next;

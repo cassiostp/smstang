@@ -50,7 +50,15 @@ always @(posedge clk_sys) begin
 end
 
 reg reset = 1;
-wire RESET_n = ~(reset | ss_reset);
+// Mirrors smstang_top's reset reg for SS loads (set on ss_reset, release
+// on its falling edge; test resets drive `reset` directly).
+reg tb_ss_reset_r = 0, tb_ss_reset_q = 0;
+always @(posedge clk_sys) begin
+   tb_ss_reset_r <= ss_reset;
+   if (ss_reset) tb_ss_reset_q <= 1;
+   else if (tb_ss_reset_r && !ss_reset) tb_ss_reset_q <= 0;
+end
+wire RESET_n = ~(reset | tb_ss_reset_q);
 
 // ---- machine wires ----
 wire [21:0] rom_a;
