@@ -372,7 +372,7 @@ savestate_sms #(.VARIANT(SS_VARIANT)) ss_engine (
     .clk(clk_sys), .ce_phase(ss_ce_phase), .resetn(locked),
     .ss_flags(ss_flags), .ss_supported(ss_supported), .ss_point(ss_point),
     .ss_freeze(ss_freeze), .ss_reset(ss_reset), .ss_loaded(ss_loaded),
-    .ss_edge_reset(), .ss_active(ss_active), .ss_snd_rst(ss_snd_rst), .ss_snd_rst(ss_snd_rst),
+    .ss_edge_reset(), .ss_active(ss_active), .ss_snd_rst(ss_snd_rst),
     .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_dout),
     .mem_addr(ss_mem_addr), .mem_din(ss_mem_din), .mem_we(ss_mem_we),
     .mem_req(ss_mem_req), .mem_ack(ss_mem_ack), .mem_q(ss_mem_q),

@@ -20,7 +20,7 @@
     */
 
 module jt89_mixer #(parameter bw=9)(
-    input            rst,,
+    input            rst,
     input            ss_snd_rst,
     input            clk,
     input            clk_en,

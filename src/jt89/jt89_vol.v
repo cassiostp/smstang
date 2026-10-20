@@ -25,7 +25,7 @@
 module jt89_vol(
     input         clk,
     input         clk_en,
-    input         rst,,
+    input         rst,
     input         ss_snd_rst,
     input         din,
     input  [3:0]  vol,

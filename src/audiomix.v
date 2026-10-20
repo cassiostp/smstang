@@ -32,14 +32,20 @@ module AudioMix(clk, reset_n, audio_in_l1, audio_in_l2, audio_in_r1, audio_in_r2
    assign overflow = sum[15] ^ sum[16];
    
    assign clipped = (overflow == 1'b0) ? sum : {17{sum[16]}};
+   // toggle free-runs L/R; reset defines the phase (the port was
+   // connected but unused -- without it L/R swap is nondeterministic).
    always @(posedge clk) begin
-      if (ss_we && ss_a == 10'h3D)
+      if (!reset_n)
+         toggle <= 1'b0;
+      else if (ss_we && ss_a == 10'h3D)
          toggle <= ss_din[0];
-      else if (toggle == 1'b0)
-         audio_l <= clipped[15:0];
-      else
-         audio_r <= clipped[15:0];
-      toggle <= ~toggle;
+      else begin
+         if (toggle == 1'b0)
+            audio_l <= clipped[15:0];
+         else
+            audio_r <= clipped[15:0];
+         toggle <= ~toggle;
+      end
    end 
    
 endmodule

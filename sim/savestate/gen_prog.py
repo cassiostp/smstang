@@ -64,6 +64,7 @@ def vram_addr(a, cmd=0x40):
 
 # ---- reset vector ----
 emit(0xF3)                    # DI
+emit(0xED, 0x56)              # IM 1 (frame IRQ vectors to RST 38h)
 emit(0x31, 0xF0, 0xDF)        # LD SP,$DFF0
 jp("main")
 while len(code) < 0x38:
@@ -72,6 +73,8 @@ while len(code) < 0x38:
 # ---- RST 38h: frame IRQ: frame++ ----
 label("irq")
 emit(0xF5)                    # PUSH AF
+emit(0xDB, 0xBF)              # IN A,($BF): ack the frame IRQ (else it sticks
+                              # and the handler spins instead of 1/frame)
 emit(0x21, 0x00, 0xC0)        # LD HL,$C000
 emit(0x34)                    # INC (HL)
 emit(0xF1)                    # POP AF
@@ -171,8 +174,8 @@ out_p(0x7F)                   # tone2 vol
 ld_a_n(0x9F)
 out_p(0x7F)                   # noise vol mute
 # battery NVRAM on + marker
-ld_a_n(0x0C)
-emit(0x32, 0xFC, 0xFF)        # LD ($FFFC),A (RAM enable)
+ld_a_n(0x08)
+emit(0x32, 0xFC, 0xFF)        # LD ($FFFC),A (RAM enable, page 0)
 ld_a_n(0xA5)
 emit(0x32, 0x00, 0x80)        # LD ($8000),A
 emit(0xFB)                    # EI

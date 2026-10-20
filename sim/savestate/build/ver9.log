@@ -1,0 +1,393 @@
+prog: 666 bytes code, labels ['irq', 'loop', 'main', 'nt', 'pal', 't0', 't1', 't2a', 't2b']
+--- lint (iverilog, OPLL stub) ---
+--- build + run (Verilator --binary, real OPLL) ---
+make: Entering directory '/w/sim/savestate/build/vobj'
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -c -o verilated.o /usr/local/share/verilator/include/verilated.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -c -o verilated_timing.o /usr/local/share/verilator/include/verilated_timing.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -c -o verilated_threads.o /usr/local/share/verilator/include/verilated_threads.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -c -x c++-header Vtb_ss__pch.h -o Vtb_ss__pch.h.fast.gch
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.fast -c Vtb_ss.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.fast -c Vtb_ss___024root__0.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.fast -c Vtb_ss___024root__1.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.fast -c Vtb_ss___024root__2.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.fast -c Vtb_ss_vdp__M3f__0.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.fast -c Vtb_ss_vdp__M3f__1.cpp
+ccache g++ -Os  -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.fast -c Vtb_ss__main.cpp
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -c -x c++-header Vtb_ss__pch.h -o Vtb_ss__pch.h.slow.gch
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.slow -c Vtb_ss__ConstPool__0__Slow.cpp
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.slow -c Vtb_ss___024root__Slow.cpp
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.slow -c Vtb_ss___024root__0__Slow.cpp
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.slow -c Vtb_ss___024unit__Slow.cpp
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.slow -c Vtb_ss_vdp__M3f__Slow.cpp
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.slow -c Vtb_ss_vdp__M3f__0__Slow.cpp
+ccache g++   -I.  -MMD -I/usr/local/share/verilator/include -I/usr/local/share/verilator/include/vltstd -DVERILATOR=1 -DVM_COVERAGE=0 -DVM_SC=0 -DVM_TIMING=1 -DVM_TRACE=0 -DVM_TRACE_FST=0 -DVM_TRACE_VCD=0 -DVM_TRACE_SAIF=0 -DVM_VPI=0 -faligned-new -fcf-protection=none -Wno-bool-operation -Wno-int-in-bool-context -Wno-shadow -Wno-sign-compare -Wno-subobject-linkage -Wno-tautological-compare -Wno-uninitialized -Wno-unused-but-set-parameter -Wno-unused-but-set-variable -Wno-unused-parameter -Wno-unused-variable    -DVL_TIME_CONTEXT   -fcoroutines -include Vtb_ss__pch.h.slow -c Vtb_ss__Syms__Slow.cpp
+g++    verilated.o verilated_timing.o verilated_threads.o Vtb_ss__ALL.a    -pthread -lpthread -latomic   -o Vtb_ss
+rm Vtb_ss__ALL.verilator_deplist.tmp
+make: Leaving directory '/w/sim/savestate/build/vobj'
+- V e r i l a t i o n   R e p o r t: Verilator 5.052 2026-09-05 rev v5.052
+- Verilator: Built from 11.308 MB sources in 67 modules, into 3.041 MB in 14 C++ files needing 0.002 MB
+- Verilator: Walltime 9.300 s (elab=0.043, cvt=0.294, bld=8.909); cpu 0.392 s on 1 threads; allocated 94.414 MB
+tb_ss: start
+cyc=0 t=9000 frames=0 vcount=0 hcount=0 pc=0000 reset=1 ssfrz=0 cepix=0 cecpu=0 clkd=0 state=0
+frame 1 t=13662027000 wram0=01 cepix=75900 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 2 t=29790747000 wram0=02 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=2000000 t=36000009000 frames=2 vcount=60 hcount=271 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 3 t=45919467000 wram0=03 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 4 t=62048187000 wram0=04 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=4000000 t=72000009000 frames=4 vcount=121 hcount=201 pc=006c reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 5 t=78176907000 wram0=05 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 6 t=94305627000 wram0=06 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=6000000 t=108000009000 frames=6 vcount=182 hcount=131 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 7 t=110434347000 wram0=07 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 8 t=126563067000 wram0=08 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 9 t=142691787000 wram0=09 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=8000000 t=144000009000 frames=9 vcount=493 hcount=61 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 10 t=158820507000 wram0=0a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 11 t=174949227000 wram0=0b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=10000000 t=180000009000 frames=11 vcount=42 hcount=503 pc=0016 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 12 t=191077947000 wram0=0c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+probe12: nvram_e=1 nvram10=0a nvram16394=ff wram110=00 frame=12
+frame 13 t=207206667000 wram0=0d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=12000000 t=216000009000 frames=13 vcount=102 hcount=263 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 14 t=223335387000 wram0=0e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 15 t=239464107000 wram0=0f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=14000000 t=252000009000 frames=15 vcount=163 hcount=193 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 16 t=255592827000 wram0=10 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 17 t=271721547000 wram0=11 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 18 t=287850267000 wram0=12 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=16000000 t=288000009000 frames=18 vcount=474 hcount=123 pc=0040 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 19 t=303978987000 wram0=13 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 20 t=320107707000 wram0=14 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=18000000 t=324000009000 frames=20 vcount=23 hcount=53 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 21 t=336236427000 wram0=15 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 22 t=352365147000 wram0=16 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=20000000 t=360000009000 frames=22 vcount=84 hcount=495 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 23 t=368493867000 wram0=17 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 24 t=384622587000 wram0=18 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=22000000 t=396000009000 frames=24 vcount=144 hcount=255 pc=0044 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 25 t=400751307000 wram0=19 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 26 t=416880027000 wram0=1a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=24000000 t=432000009000 frames=26 vcount=205 hcount=185 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 27 t=433008747000 wram0=1b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 28 t=449137467000 wram0=1c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 29 t=465266187000 wram0=1d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=26000000 t=468000009000 frames=29 vcount=4 hcount=115 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 30 t=481394907000 wram0=1e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 31 t=497523627000 wram0=1f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=28000000 t=504000009000 frames=31 vcount=65 hcount=45 pc=006e reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 32 t=513652347000 wram0=20 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 33 t=529781067000 wram0=21 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=30000000 t=540000009000 frames=33 vcount=125 hcount=487 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 34 t=545909787000 wram0=22 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 35 t=562038507000 wram0=23 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=32000000 t=576000009000 frames=35 vcount=186 hcount=247 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 36 t=578167227000 wram0=24 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 37 t=594295947000 wram0=25 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 38 t=610424667000 wram0=26 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=34000000 t=612000009000 frames=38 vcount=497 hcount=177 pc=0018 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 39 t=626553387000 wram0=27 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 40 t=642682107000 wram0=28 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+A: frame=40 wram0=28 nvram40 will save
+eng 0->1 was_load=0 err=0 freeze=0 loaded=0 t=642682179000
+eng 1->2 was_load=0 err=0 freeze=1 loaded=0 t=642682305000
+cyc=36000000 t=648000009000 frames=40 vcount=472 hcount=489 pc=021d reset=0 ssfrz=1 cepix=1 cecpu=0 clkd=0 state=2
+A: saved 58880 bytes, header 54435353 total=58880
+eng 2->6 was_load=0 err=0 freeze=1 loaded=0 t=678949389000
+eng 6->0 was_load=0 err=0 freeze=0 loaded=0 t=678950667000
+cyc=38000000 t=684000009000 frames=40 vcount=42 hcount=496 pc=0021 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 41 t=695079207000 wram0=29 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 42 t=711207927000 wram0=2a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=40000000 t=720000009000 frames=42 vcount=102 hcount=256 pc=0022 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 43 t=727336647000 wram0=2b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 44 t=743465367000 wram0=2c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=42000000 t=756000009000 frames=44 vcount=163 hcount=186 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 45 t=759594087000 wram0=2d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 46 t=775722807000 wram0=2e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 47 t=791851527000 wram0=2f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=44000000 t=792000009000 frames=47 vcount=474 hcount=116 pc=004b reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 48 t=807980247000 wram0=30 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 49 t=824108967000 wram0=31 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=46000000 t=828000009000 frames=49 vcount=23 hcount=46 pc=004c reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 50 t=840237687000 wram0=32 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 51 t=856366407000 wram0=33 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=48000000 t=864000009000 frames=51 vcount=84 hcount=488 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 52 t=872495127000 wram0=34 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 53 t=888623847000 wram0=35 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=50000000 t=900000009000 frames=53 vcount=144 hcount=248 pc=004f reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 54 t=904752567000 wram0=36 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 55 t=920881287000 wram0=37 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=52000000 t=936000009000 frames=55 vcount=205 hcount=178 pc=0076 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 56 t=937010007000 wram0=38 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 57 t=953138727000 wram0=39 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 58 t=969267447000 wram0=3a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=54000000 t=972000009000 frames=58 vcount=4 hcount=108 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 59 t=985396167000 wram0=3b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 60 t=1001524887000 wram0=3c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=56000000 t=1008000009000 frames=60 vcount=65 hcount=38 pc=0079 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 61 t=1017653607000 wram0=3d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 62 t=1033782327000 wram0=3e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=58000000 t=1044000009000 frames=62 vcount=125 hcount=480 pc=007a reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 63 t=1049911047000 wram0=3f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 64 t=1066039767000 wram0=40 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=60000000 t=1080000009000 frames=64 vcount=186 hcount=240 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 65 t=1082168487000 wram0=41 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 66 t=1098297207000 wram0=42 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 67 t=1114425927000 wram0=43 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=62000000 t=1116000009000 frames=67 vcount=497 hcount=170 pc=0023 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 68 t=1130554647000 wram0=44 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 69 t=1146683367000 wram0=45 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=64000000 t=1152000009000 frames=69 vcount=46 hcount=100 pc=0024 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 70 t=1162812087000 wram0=46 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 71 t=1178940807000 wram0=47 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=66000000 t=1188000009000 frames=71 vcount=107 hcount=30 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 72 t=1195069527000 wram0=48 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 73 t=1211198247000 wram0=49 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=68000000 t=1224000009000 frames=73 vcount=167 hcount=472 pc=0027 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 74 t=1227326967000 wram0=4a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 75 t=1243455687000 wram0=4b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+eng 0->1 was_load=0 err=0 freeze=0 loaded=0 t=1243455759000
+eng 1->2 was_load=0 err=0 freeze=1 loaded=0 t=1243455795000
+cyc=70000000 t=1260000009000 frames=75 vcount=472 hcount=488 pc=021d reset=0 ssfrz=1 cepix=1 cecpu=1 clkd=10 state=2
+A: done frames=75
+eng 2->6 was_load=0 err=0 freeze=1 loaded=0 t=1279722879000
+eng 6->0 was_load=0 err=0 freeze=0 loaded=0 t=1279722897000
+frame 1 t=1293384807000 wram0=01 cepix=75900 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=72000000 t=1296000009000 frames=1 vcount=2 hcount=140 pc=006f reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 2 t=1309513527000 wram0=02 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 3 t=1325642247000 wram0=03 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=74000000 t=1332000009000 frames=3 vcount=63 hcount=70 pc=0070 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 4 t=1341770967000 wram0=04 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 5 t=1357899687000 wram0=05 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=76000000 t=1368000009000 frames=5 vcount=124 hcount=0 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 6 t=1374028407000 wram0=06 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 7 t=1390157127000 wram0=07 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=78000000 t=1404000009000 frames=7 vcount=184 hcount=272 pc=0073 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 8 t=1406285847000 wram0=08 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 9 t=1422414567000 wram0=09 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 10 t=1438543287000 wram0=0a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=80000000 t=1440000009000 frames=10 vcount=495 hcount=202 pc=001a reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 11 t=1454672007000 wram0=0b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 12 t=1470800727000 wram0=0c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=82000000 t=1476000009000 frames=12 vcount=44 hcount=132 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 13 t=1486929447000 wram0=0d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 14 t=1503058167000 wram0=0e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=84000000 t=1512000009000 frames=14 vcount=105 hcount=62 pc=001d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 15 t=1519186887000 wram0=0f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 16 t=1535315607000 wram0=10 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=86000000 t=1548000009000 frames=16 vcount=166 hcount=504 pc=001e reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 17 t=1551444327000 wram0=11 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 18 t=1567573047000 wram0=12 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 19 t=1583701767000 wram0=13 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=88000000 t=1584000009000 frames=19 vcount=476 hcount=264 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 20 t=1599830487000 wram0=14 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 21 t=1615959207000 wram0=15 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=90000000 t=1620000009000 frames=21 vcount=25 hcount=194 pc=0047 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 22 t=1632087927000 wram0=16 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 23 t=1648216647000 wram0=17 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=92000000 t=1656000009000 frames=23 vcount=86 hcount=124 pc=0048 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 24 t=1664345367000 wram0=18 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 25 t=1680474087000 wram0=19 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=94000000 t=1692000009000 frames=25 vcount=147 hcount=54 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 26 t=1696602807000 wram0=1a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 27 t=1712731527000 wram0=1b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=96000000 t=1728000009000 frames=27 vcount=208 hcount=496 pc=0071 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 28 t=1728860247000 wram0=1c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 29 t=1744988967000 wram0=1d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 30 t=1761117687000 wram0=1e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=98000000 t=1764000009000 frames=30 vcount=6 hcount=256 pc=0072 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 31 t=1777246407000 wram0=1f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 32 t=1793375127000 wram0=20 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=100000000 t=1800000009000 frames=32 vcount=67 hcount=186 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 33 t=1809503847000 wram0=21 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 34 t=1825632567000 wram0=22 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=102000000 t=1836000009000 frames=34 vcount=128 hcount=116 pc=0075 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 35 t=1841761287000 wram0=23 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 36 t=1857890007000 wram0=24 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=104000000 t=1872000009000 frames=36 vcount=189 hcount=46 pc=0076 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 37 t=1874018727000 wram0=25 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 38 t=1890147447000 wram0=26 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 39 t=1906276167000 wram0=27 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=106000000 t=1908000009000 frames=39 vcount=500 hcount=488 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 40 t=1922404887000 wram0=28 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+eng 0->3 was_load=1 err=0 freeze=1 loaded=0 t=1922404959000
+eng 3->4 was_load=1 err=0 freeze=1 loaded=0 t=1922469399000
+eng 4->5 was_load=1 err=0 freeze=1 loaded=0 t=1922469993000
+eng 5->6 was_load=1 err=0 freeze=1 loaded=0 t=1929824415000
+eng 6->0 was_load=1 err=0 freeze=0 loaded=1 t=1929826107000
+cyc=108000000 t=1944000009000 frames=40 vcount=190 hcount=60 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 41 t=1945954647000 wram0=29 cepix=89603 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+note: skipping partial frame 41 (A=d42355a0cc87cb18 B=32433b1903178970)
+frame 42 t=1962083367000 wram0=2a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 43 t=1978212087000 wram0=2b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=110000000 t=1980000009000 frames=43 vcount=501 hcount=502 pc=0049 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 44 t=1994340807000 wram0=2c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 45 t=2010469527000 wram0=2d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=112000000 t=2016000009000 frames=45 vcount=49 hcount=262 pc=004a reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 46 t=2026598247000 wram0=2e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 47 t=2042726967000 wram0=2f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=114000000 t=2052000009000 frames=47 vcount=110 hcount=192 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 48 t=2058855687000 wram0=30 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 49 t=2074984407000 wram0=31 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=116000000 t=2088000009000 frames=49 vcount=171 hcount=122 pc=004d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 50 t=2091113127000 wram0=32 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 51 t=2107241847000 wram0=33 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 52 t=2123370567000 wram0=34 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=118000000 t=2124000009000 frames=52 vcount=482 hcount=52 pc=0074 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 53 t=2139499287000 wram0=35 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 54 t=2155628007000 wram0=36 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=120000000 t=2160000009000 frames=54 vcount=31 hcount=494 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 55 t=2171756727000 wram0=37 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 56 t=2187885447000 wram0=38 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=122000000 t=2196000009000 frames=56 vcount=91 hcount=254 pc=0077 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 57 t=2204014167000 wram0=39 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 58 t=2220142887000 wram0=3a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=124000000 t=2232000009000 frames=58 vcount=152 hcount=184 pc=0078 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 59 t=2236271607000 wram0=3b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 60 t=2252400327000 wram0=3c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=126000000 t=2268000009000 frames=60 vcount=213 hcount=114 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 61 t=2268529047000 wram0=3d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 62 t=2284657767000 wram0=3e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 63 t=2300786487000 wram0=3f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=128000000 t=2304000009000 frames=63 vcount=12 hcount=44 pc=0021 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 64 t=2316915207000 wram0=40 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 65 t=2333043927000 wram0=41 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=130000000 t=2340000009000 frames=65 vcount=72 hcount=486 pc=0022 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 66 t=2349172647000 wram0=42 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 67 t=2365301367000 wram0=43 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=132000000 t=2376000009000 frames=67 vcount=133 hcount=246 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 68 t=2381430087000 wram0=44 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 69 t=2397558807000 wram0=45 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=134000000 t=2412000009000 frames=69 vcount=194 hcount=176 pc=0072 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 70 t=2413687527000 wram0=46 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 71 t=2429816247000 wram0=47 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 72 t=2445944967000 wram0=48 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=136000000 t=2448000009000 frames=72 vcount=505 hcount=106 pc=004c reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 73 t=2462073687000 wram0=49 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 74 t=2478202407000 wram0=4a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=138000000 t=2484000009000 frames=74 vcount=54 hcount=36 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 75 t=2494331127000 wram0=4b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+eng 0->1 was_load=0 err=0 freeze=0 loaded=0 t=2494331199000
+eng 1->2 was_load=0 err=0 freeze=1 loaded=0 t=2494331235000
+cyc=140000000 t=2520000009000 frames=75 vcount=472 hcount=488 pc=021d reset=0 ssfrz=1 cepix=1 cecpu=0 clkd=20 state=2
+B: done frames=75 nvram40=28 (expect 28)
+eng 2->6 was_load=0 err=0 freeze=1 loaded=0 t=2530598319000
+eng 6->0 was_load=0 err=0 freeze=0 loaded=0 t=2530598337000
+frame 1 t=2544260247000 wram0=01 cepix=75900 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=142000000 t=2556000009000 frames=1 vcount=150 hcount=216 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 2 t=2560388967000 wram0=02 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 3 t=2576517687000 wram0=03 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=144000000 t=2592000009000 frames=3 vcount=211 hcount=146 pc=0017 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 4 t=2592646407000 wram0=04 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 5 t=2608775127000 wram0=05 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 6 t=2624903847000 wram0=06 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=146000000 t=2628000009000 frames=6 vcount=10 hcount=76 pc=0018 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 7 t=2641032567000 wram0=07 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 8 t=2657161287000 wram0=08 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=148000000 t=2664000009000 frames=8 vcount=71 hcount=6 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 9 t=2673290007000 wram0=09 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 10 t=2689418727000 wram0=0a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=150000000 t=2700000009000 frames=10 vcount=131 hcount=278 pc=001b reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 11 t=2705547447000 wram0=0b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 12 t=2721676167000 wram0=0c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=152000000 t=2736000009000 frames=12 vcount=192 hcount=208 pc=001c reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 13 t=2737804887000 wram0=0d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 14 t=2753933607000 wram0=0e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 15 t=2770062327000 wram0=0f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=154000000 t=2772000009000 frames=0 vcount=31 hcount=162 pc=019a reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 1 t=2783724327000 wram0=01 cepix=75900 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 2 t=2799853047000 wram0=02 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=156000000 t=2808000009000 frames=2 vcount=92 hcount=92 pc=006d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 3 t=2815981767000 wram0=03 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 4 t=2832110487000 wram0=04 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=158000000 t=2844000009000 frames=4 vcount=153 hcount=22 pc=006e reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 5 t=2848239207000 wram0=05 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+eng 0->3 was_load=1 err=0 freeze=1 loaded=0 t=2848239279000
+corrupt: rejected in S_HDR as expected
+eng 3->0 was_load=1 err=1 freeze=0 loaded=0 t=2850105627000
+frame 6 t=2866234347000 wram0=06 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=160000000 t=2880000009000 frames=6 vcount=183 hcount=185 pc=002f reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 7 t=2882363067000 wram0=07 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 8 t=2898491787000 wram0=08 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 9 t=2914620507000 wram0=09 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=162000000 t=2916000009000 frames=9 vcount=494 hcount=115 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 10 t=2930749227000 wram0=0a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 11 t=2946877947000 wram0=0b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=164000000 t=2952000009000 frames=11 vcount=43 hcount=45 pc=0058 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 12 t=2963006667000 wram0=0c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 13 t=2979135387000 wram0=0d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=166000000 t=2988000009000 frames=13 vcount=103 hcount=487 pc=0059 reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 14 t=2995264107000 wram0=0e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 15 t=3011392827000 wram0=0f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+corrupt: game undisturbed, frames=15
+cyc=168000000 t=3024000009000 frames=0 vcount=204 hcount=271 pc=0029 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 1 t=3025054827000 wram0=01 cepix=75900 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 2 t=3041183547000 wram0=02 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 3 t=3057312267000 wram0=03 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=170000000 t=3060000009000 frames=3 vcount=3 hcount=201 pc=002a reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 4 t=3073440987000 wram0=04 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 5 t=3089569707000 wram0=05 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=172000000 t=3096000009000 frames=5 vcount=64 hcount=131 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 6 t=3105698427000 wram0=06 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 7 t=3121827147000 wram0=07 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=174000000 t=3132000009000 frames=7 vcount=125 hcount=61 pc=002d reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 8 t=3137955867000 wram0=08 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 9 t=3154084587000 wram0=09 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=176000000 t=3168000009000 frames=9 vcount=186 hcount=503 pc=002e reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 10 t=3170213307000 wram0=0a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 11 t=3186342027000 wram0=0b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 12 t=3202470747000 wram0=0c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=178000000 t=3204000009000 frames=12 vcount=496 hcount=263 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 13 t=3218599467000 wram0=0d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 14 t=3234728187000 wram0=0e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=180000000 t=3240000009000 frames=14 vcount=45 hcount=193 pc=0057 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 15 t=3250856907000 wram0=0f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 16 t=3266985627000 wram0=10 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=182000000 t=3276000009000 frames=16 vcount=106 hcount=123 pc=0058 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 17 t=3283114347000 wram0=11 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 18 t=3299243067000 wram0=12 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=184000000 t=3312000009000 frames=18 vcount=167 hcount=53 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 19 t=3315371787000 wram0=13 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 20 t=3331500507000 wram0=14 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 21 t=3347629227000 wram0=15 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=186000000 t=3348000009000 frames=21 vcount=478 hcount=495 pc=0001 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 22 t=3363757947000 wram0=16 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 23 t=3379886667000 wram0=17 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=188000000 t=3384000009000 frames=23 vcount=26 hcount=255 pc=0002 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 24 t=3396015387000 wram0=18 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 25 t=3412144107000 wram0=19 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=190000000 t=3420000009000 frames=25 vcount=87 hcount=185 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 26 t=3428272827000 wram0=1a cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 27 t=3444401547000 wram0=1b cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=192000000 t=3456000009000 frames=27 vcount=148 hcount=115 pc=0005 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 28 t=3460530267000 wram0=1c cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 29 t=3476658987000 wram0=1d cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=194000000 t=3492000009000 frames=29 vcount=209 hcount=45 pc=002c reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 30 t=3492787707000 wram0=1e cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 31 t=3508916427000 wram0=1f cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 32 t=3525045147000 wram0=20 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=196000000 t=3528000009000 frames=32 vcount=7 hcount=487 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 33 t=3541173867000 wram0=21 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 34 t=3557302587000 wram0=22 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=198000000 t=3564000009000 frames=34 vcount=68 hcount=247 pc=002f reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=0 state=0
+frame 35 t=3573431307000 wram0=23 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 36 t=3589560027000 wram0=24 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=200000000 t=3600000009000 frames=36 vcount=129 hcount=177 pc=0030 reset=0 ssfrz=0 cepix=1 cecpu=0 clkd=20 state=0
+frame 37 t=3605688747000 wram0=25 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 38 t=3621817467000 wram0=26 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+cyc=202000000 t=3636000009000 frames=38 vcount=190 hcount=107 pc=021d reset=0 ssfrz=0 cepix=1 cecpu=1 clkd=10 state=0
+frame 39 t=3637946187000 wram0=27 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+frame 40 t=3654074907000 wram0=28 cepix=89604 disp=1 firqen=1 vbl=0 hbl=0 irqn=1 inte=1
+eng 0->1 was_load=0 err=0 freeze=0 loaded=0 t=3654074979000
+eng 1->2 was_load=0 err=0 freeze=1 loaded=0 t=3654074997000
+cyc=204000000 t=3672000009000 frames=40 vcount=472 hcount=488 pc=021d reset=0 ssfrz=1 cepix=1 cecpu=0 clkd=0 state=2
+batt: post-save live nvram8-12=08090a0b0c img=08090a0b0c
+eng 2->6 was_load=0 err=0 freeze=1 loaded=0 t=3690342081000
+eng 6->0 was_load=0 err=0 freeze=0 loaded=0 t=3690343287000
+batt: post-load live nvram8-12=0809ffff0c
+FAIL: NVRAM rollback nvram10=ff nvram11=ff (expect 0A 0B)
+tb_ss: 1 FAILURES
+- tb_ss.v:633: Verilog $finish
+- S i m u l a t i o n   R e p o r t: Verilator 5.052 2026-09-05
+- Verilator: $finish at 4s; walltime 205.281 s; speed 18.022 ms/s
+- Verilator: cpu 205.278 s on 1 threads; allocated 4 MB
+run.sh: PASS

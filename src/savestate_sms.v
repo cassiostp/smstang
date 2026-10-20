@@ -44,7 +44,7 @@ module savestate_sms #(
     // identically after a save and after a load (the OPLL idles with a
     // drifting output -- Verified in sim/savestate/opll_idle -- and the
     // amp/mixer registers reconverge within cycles; freezing holds them).
-    output            ss_snd_rst,    output            ss_edge_reset,
+    output            ss_snd_rst,
     output            ss_active,
     // register byte bus to the SMS machine
     output reg [9:0]  ss_a,
