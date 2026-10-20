@@ -94,15 +94,17 @@ COSIM_SRCS := /coresim-src/sim/cosim/cosim_top.sv \
 # variant (its OSD runs at 720p timings).
 COSIM_VARIANT_INC := -I/coresim-src/src/variant/standard
 
-model: $(GEN)/iosys_bl616_cosim.v $(GEN)/dpram_sim.v $(GEN)/uart_fixed_sim.v
+model: $(GEN)/iosys_bl616_cosim.v $(GEN)/dpram_sim.v $(GEN)/uart_fixed_sim.v $(COSIM)/cosim_top.sv $(COSIM)/../../src/savestate_sms.v
 	mkdir -p $(OBJ) $(COSIM)/build/runtime
 	# -Wno-*: the core's own RTL carries pre-existing style Verilator flags
 	# (implicit nets, width mismatches, partial cases, undriven pins); the
 	# generated copies must stay line-identical to it apart from the
 	# documented seds, so the waivers live here, not in its sources.
+	# MULTIDRIVEN covers the battery dpram's two write ports (game + MCU
+	# save channel by design; same for the savestate engine's share of port A).
 	$(VERILATOR) --cc --top-module cosim_top --prefix Vcosim_top \
 	    -Mdir obj -DCOSIM -CFLAGS "-O2" \
-	    -Wno-PINMISSING -Wno-IMPLICIT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-CASEINCOMPLETE \
+	    -Wno-PINMISSING -Wno-IMPLICIT -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-CASEINCOMPLETE -Wno-MULTIDRIVEN \
 	    $(COSIM_VARIANT_INC) \
 	    $(COSIM_SRCS) > $(COSIM)/build/verilate.log 2>&1 && \
 	test ! -s $(COSIM)/build/verilate.log || ! grep -E "PINMISSING.*(cosim_top|dpram|gowin_dpb)" $(COSIM)/build/verilate.log

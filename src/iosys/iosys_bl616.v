@@ -454,7 +454,8 @@ always @(posedge clk) begin
     end else begin
         tx_valid <= 0;
         
-        // Joypad state transmission logic        ss_img_rd_stb <= 0;
+        // Joypad state transmission logic
+        ss_img_rd_stb <= 0;
         ss_img_taken <= 0;
         ss_img_abort <= 0;
 
