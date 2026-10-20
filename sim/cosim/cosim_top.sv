@@ -254,8 +254,7 @@ savestate_sms ss_engine (
     .img_rdy(ss_img_rdy), .img_q(ss_img_q),
     .img_waddr(ss_img_waddr), .img_wdin(ss_img_wdin), .img_wr_stb(ss_img_wr_stb)
 );
-wire [7:0] game_q;
-wire game_we = weA;                  // sv_core_we, exactly as smstang_top
+// (game_q/game_we declared with the engine block above)
 
 dpram #(.widthad_a(15)) nvram (
     .clock_a(clk),
