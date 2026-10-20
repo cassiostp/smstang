@@ -12,5 +12,5 @@ set_multicycle_path 1 -hold -start -from [get_pins {system/z80_inst/**/*}] -to [
 # conservative. Every other engine output (ss_freeze/ss_reset/ss_we/
 # mem_*/ss_active/ss_loaded/ss_snd_rst/status) stays single-cycle: those
 # strobes and selects act on specific cycles and must meet default timing.
-set_multicycle_path 2 -setup -from [get_pins {ss_engine/**/*}] -to [get_pins {ss_engine/img_q[7] ss_engine/img_q[6] ss_engine/img_q[5] ss_engine/img_q[4] ss_engine/img_q[3] ss_engine/img_q[2] ss_engine/img_q[1] ss_engine/img_q[0]}]
-set_multicycle_path 1 -hold -from [get_pins {ss_engine/**/*}] -to [get_pins {ss_engine/img_q[7] ss_engine/img_q[6] ss_engine/img_q[5] ss_engine/img_q[4] ss_engine/img_q[3] ss_engine/img_q[2] ss_engine/img_q[1] ss_engine/img_q[0]}]
+set_multicycle_path 2 -setup -from [get_pins {ss_engine/**/*}] -to [get_pins {ss_engine/img_q[7]}]
+set_multicycle_path 1 -hold -from [get_pins {ss_engine/**/*}] -to [get_pins {ss_engine/img_q[7]}]
