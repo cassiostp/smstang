@@ -10,8 +10,12 @@
 #                   reset (Verilator, scanlines off), plus short soaks in the
 #                   224-line, 240-line and Game Gear modes
 # hz120 (480p120): the same benches at twice the console rate: tb_frame_lock
-#                   runs in BFI modes 0, 1 and 2; the soak checks each game
+#                   runs in BFI modes 0, 1, 2 and 3; the soak checks each game
 #                   frame is read twice (lit + inserted) at full scale.
+#                   Modes 2 (bright) / 3 (beam) get exact per-pixel checks
+#                   against sim/framelock/bfi_lottes.hex (itself verified
+#                   against tools/bfi_lottes.py below), plus a negative
+#                   control with a corrupted table.
 # Afterwards (host): python3 sim/framelock/check_audio.py [--hz120]
 #   sim/framelock/build/audio_hdmi_sms.hex sim/framelock/build/tb_sms.log
 set -e
@@ -43,9 +47,22 @@ INC="-I $RTL/variant/$V"
 
 $IV sh -c "iverilog -g2012 $INC -o build_pos.out tb_native_pos.v $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v && vvp build_pos.out"
 if [ "$V" = hz120 ]; then
-for BFI in 0 1 2; do
+# the Lottes table the modes-2/3 checks read: committed, verified fresh here
+python3 ../../tools/bfi_lottes.py --hex | cmp -s bfi_lottes.hex - || { echo "bfi_lottes.hex is stale: regenerate with tools/bfi_lottes.py --hex"; exit 1; }
+for BFI in 0 1 2 3; do
 $IV sh -c "iverilog -g2012 $INC -DBFI_MODE=$BFI -o build_lock$BFI.out tb_frame_lock.v sms_frame_model.v $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v && vvp build_lock$BFI.out"
 done
+# negative control: the same mode-2 binary with one corrupted table entry
+# (code 0x70) must fail the exact pair check
+mkdir -p build/negative
+cp build_lock2.out build/negative/
+cp bfi_lottes.hex build/negative/
+sed -i '113s/^../ff/' build/negative/bfi_lottes.hex
+if $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockneg" --user "$(id -u):$(id -g)" -v "$PWD/build/negative:/w" -w /w tangcore-iv:1 sh -c "vvp build_lock2.out"; then
+  echo "FAIL: negative control passed with a corrupted table"; exit 1;
+else
+  echo "negative control: corrupted table fails as expected"
+fi
 else
 $IV sh -c "iverilog -g2012 $INC -o build_lock.out tb_frame_lock.v sms_frame_model.v $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v && vvp build_lock.out"
 fi
@@ -77,11 +94,18 @@ $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockmake_$V" --user "$(id -u)
 if [ "$V" = hz120 ]; then
 # 138K-only: the hz120 variant's sys PLL (50*28/26) cannot lock a 60K-style rate;
 # the 120 Hz bitstream is console138k-only, like the NES 480p120 reference.
-# Logs land in build/hz120/ (the harness writes tb_<tag>.log next to itself).
+# Logs land in build/hz120/ (the harness writes tb_<tag>.log next to itself,
+# and reads bfi_lottes.hex from there too).
 mkdir -p build/hz120
+cp bfi_lottes.hex build/hz120/bfi_lottes.hex
 $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_locksms" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build/hz120 --entrypoint ../obj_hz120/Vfl_top verilator/verilator:latest \
   sms || { tail -20 build/hz120/tb_sms.log; exit 1; };
 grep -q "^tb_frame_lock: PASS" build/hz120/tb_sms.log
+for BFI in 2 3; do
+$DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockbfi$BFI" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build/hz120 --entrypoint ../obj_hz120/Vfl_top verilator/verilator:latest \
+  sms_bfi$BFI sms short $BFI || { tail -20 build/hz120/tb_sms_bfi$BFI.log; exit 1; };
+grep -q "^tb_frame_lock: PASS" build/hz120/tb_sms_bfi$BFI.log
+done
 for cfg in sms224 sms240 gg; do
   $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lock_$cfg" --user "$(id -u):$(id -g)" -v "$PWD:/w" -w /w/build/hz120 --entrypoint ../obj_hz120/Vfl_top verilator/verilator:latest \
     $cfg $cfg short || { tail -20 build/hz120/tb_$cfg.log; exit 1; }

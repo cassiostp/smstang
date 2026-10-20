@@ -20,7 +20,7 @@ module fl_top (
     input mode_m1,          // 1: 224-line mode (counter model and sms2hdmi)
     input mode_m3,          // 1: 240-line mode (counter model and sms2hdmi)
 `ifdef HZ120
-    input [1:0] bfi_mode,   // video_config[21:20]: 0 off, 1 black, 2 dim, 3 black
+    input [1:0] bfi_mode,   // video_config[21:20]: 0 off, 1 black, 2 bright, 3 beam
 `endif
     output frame_halt,
     output [8:0] x,

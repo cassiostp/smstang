@@ -12,7 +12,12 @@
 // exactly one game frame, with the inserted pass repeating the lit one; the
 // inserted pass is all black (mode 1). Optional argv[4] selects the BFI mode
 // (default 1, black); the black/inserted visual check only applies to mode
-// 1, the lock, rate, tag and audio checks run in every mode. The swap
+// 1, the lock, rate, tag and audio checks run in every mode. Modes 2
+// (bright) / 3 (beam) get exact per-pixel checks: the stimulus picture is
+// static, so adjacent settled frames must be exact complements through
+// bfi_lottes.hex (per row/channel max=HI min=LO of one game code) and
+// same-parity frames two apart bit-identical, with the HI side uniform
+// (mode 2) or flipped per half (mode 3). The swap
 // interval (1800 game frames) is longer than the soak, so no phase swap
 // happens here; the swap itself is covered by a directed Python model (see
 // the report), like the NES reference.
@@ -26,6 +31,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <string>
+#include <vector>
 #include <cmath>
 #include "Vfl_top.h"
 #include "verilated.h"
@@ -116,6 +122,28 @@ int main(int argc, char **argv) {
     int game_wr = 0;                 // game frame currently being written
     int pass_fmin = 0, pass_fmax = -1, pass_ins = 0, last_lit = -1;
     int lit_nonzero = 0, ins_nonzero = 0, stale_in_frame = 0;
+    // modes 2/3 (Lottes HI/LO): forward table from bfi_lottes.hex ("HHLL"
+    // per input code) plus the reverse membership map; the settled-frame
+    // history (static stimulus: complements adjacent, identical 2 apart).
+    // Scanlines are off in the soak, so rgb_out is the pre-fx pixel.
+    static const int ROWS = 480;
+    uint8_t THI[256], TLO[256];
+    bool valid_pair[256][256];
+    std::vector<uint32_t> cur_rgb(ROWS, 0), lit_rgb(ROWS, 0), hist1(ROWS, 0);
+    int have_hist = 0;
+    int nchk[4] = {0, 0, 0, 0};   // settled frames with pixel checks, per mode
+    for (int i = 0; i < 256; i++) for (int j = 0; j < 256; j++) valid_pair[i][j] = false;
+    {
+        FILE *hf = fopen("bfi_lottes.hex", "r");
+        if (!hf) { fprintf(stderr, "need bfi_lottes.hex beside the log (run.sh copies it)\n"); return 1; }
+        for (int i = 0; i < 256; i++) {
+            unsigned h = 0, l = 0;
+            if (fscanf(hf, "%02x%02x", &h, &l) != 2) { fprintf(stderr, "short bfi_lottes.hex\n"); return 1; }
+            THI[i] = (uint8_t)h; TLO[i] = (uint8_t)l;
+            valid_pair[h][l] = true;
+        }
+        fclose(hf);
+    }
 #else
     for (int i = 0; i < 240; i++) wr_last[i] = wr_prev[i] = 0;
 #endif
@@ -297,8 +325,8 @@ int main(int argc, char **argv) {
             if (cy == 100 && cy_q != 100) pass_ins = t->bfi_ins;
             // BFI check: picture-centre sample (360, cy) on every picture row
             if (t->cx == 360 && cy >= pic_top && cy < pic_top + pic_h && locked) {
-                if (pass_ins) { if (t->rgb_out != 0) ins_nonzero++; }
-                else if (t->rgb_out != 0) lit_nonzero++;
+                cur_rgb[cy] = t->rgb_out;
+                if (t->rgb_out != 0) { if (pass_ins) ins_nonzero++; else lit_nonzero++; }
             }
 #endif
             if (cy == 0 && cy_q != 0 && cy_q >= 0) {
@@ -325,6 +353,70 @@ int main(int argc, char **argv) {
                             }
                             if (visual && pass_ins && ins_nonzero) { LOG("FAIL: %d non-black centre samples in inserted hdmi frame %d", ins_nonzero, frame_idx); violations++; }
                             if (visual && !pass_ins && !lit_nonzero) { LOG("FAIL: lit hdmi frame %d all black at centre", frame_idx); violations++; }
+
+                            if (!visual && !pass_ins && !lit_nonzero) { LOG("FAIL: lit hdmi frame %d all black at centre", frame_idx); violations++; }
+                            if (!visual && pass_ins && !ins_nonzero) { LOG("FAIL: inserted hdmi frame %d all black at centre", frame_idx); violations++; }
+                            if (bfi == 2 || bfi == 3) {
+                                // Lottes HI/LO: the stimulus picture is
+                                // static, so this frame must be the exact
+                                // complement of the previous settled frame
+                                // through the hex table (per row/channel:
+                                // max = HI, min = LO of one game code), and
+                                // identical to the settled frame two back.
+                                // Mode 2 carries HI on the same frame for
+                                // every row; mode 3 flips it per half
+                                // (top rows cy<240 vs bottom rows).
+                                nchk[bfi]++;
+                                if (have_hist >= 1) {
+                                    int side_top = -1, side_bot = -1;  // 1: cur holds HI
+                                    for (int r = 0; r < ROWS; r++) {
+                                        uint32_t a = cur_rgb[r], b = lit_rgb[r];
+                                        for (int k = 0; k < 3; k++) {
+                                            int ca = (a >> (8 * k)) & 0xff, cb = (b >> (8 * k)) & 0xff;
+                                            int mx = ca > cb ? ca : cb, mn = ca < cb ? ca : cb;
+                                            if (!valid_pair[mx][mn]) {
+                                                LOG("FAIL: mode-%d row %d ch %d 0x%02x/0x%02x not a table pair, in frame %d",
+                                                    bfi, r, k, ca, cb, frame_idx);
+                                                violations++;
+                                                r = ROWS;
+                                                break;
+                                            }
+                                            if (mx != mn) {
+                                                int side = (ca == mx) ? 1 : 0;
+                                                int &slot = (r < ROWS / 2) ? side_top : side_bot;
+                                                if (slot < 0) slot = side;
+                                                else if (slot != side) {
+                                                    LOG("FAIL: mode-%d row %d ch %d HI side flips mid-half, in frame %d",
+                                                        bfi, r, k, frame_idx);
+                                                    violations++;
+                                                    r = ROWS;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (side_top < 0 || side_bot < 0) {
+                                        LOG("FAIL: mode-%d frame %d has no discriminating row (all HI==LO)", bfi, frame_idx);
+                                        violations++;
+                                    } else if (bfi == 2 && side_top != side_bot) {
+                                        LOG("FAIL: mode-2 frame %d top/bottom HI sides differ (%d/%d)", frame_idx, side_top, side_bot);
+                                        violations++;
+                                    } else if (bfi == 3 && side_top == side_bot) {
+                                        LOG("FAIL: mode-3 frame %d top/bottom HI sides agree (%d)", frame_idx, side_top);
+                                        violations++;
+                                    }
+                                    if (have_hist >= 2) {
+                                        for (int r = 0; r < ROWS; r++) {
+                                            if (cur_rgb[r] != hist1[r]) {
+                                                LOG("FAIL: mode-%d row %d 0x%06x != same-parity frame 0x%06x, in frame %d",
+                                                    bfi, r, cur_rgb[r], hist1[r], frame_idx);
+                                                violations++;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             if (frame_max_age > max_age_bound) { LOG("FAIL: max age %lld sys in frame %d", (long long)frame_max_age, frame_idx); violations++; }
                             if (stale_in_frame) { LOG("FAIL: %d stale reads in frame %d", stale_in_frame, frame_idx); violations++; }
                         }
@@ -341,6 +433,10 @@ int main(int argc, char **argv) {
                         if (frame_min_age < run_min_age) run_min_age = frame_min_age;
                     }
                 }
+                if (locked && (frame_idx - last_event_frame > 6) && pass_fmax >= 0) {
+                    hist1 = lit_rgb; lit_rgb = cur_rgb;
+                    if (have_hist < 3) have_hist++;
+                } else have_hist = 0;
                 frame_idx++;
                 hdmi_frames++;
                 frame_min_age = INT64_MAX;
@@ -404,6 +500,7 @@ int main(int argc, char **argv) {
     }
 
     LOG("done: halted=%d released=%d hdmi=%d vdp=%d violations=%d", halt_entered, released, hdmi_frames, vdp_frames, violations);
+    LOG("mode checked frames: off=%d black=%d bright=%d beam=%d", nchk[0], nchk[1], nchk[2], nchk[3]);
     LOG("audio: max_hdmi_step=%d (bound %d) max_repeat=%d", max_hdmi_step, AUDIO_MAX_STEP, max_repeat);
 #ifdef HZ120
     LOG("wait sys: min=%lld max=%lld (steady theory 2293)", (long long)run_min_wait, (long long)run_max_wait);

@@ -13,7 +13,17 @@
 // the lock releases the SMS once per two HDMI frames, and the bench also
 // checks per-line write-frame tags (every pass comes from a single game
 // frame, lit passes step by one, the inserted pass repeats the lit one)
-// and the inserted pass (black in mode 1, dimmed in mode 2, lit in mode 0).
+// and the inserted pass (black in mode 1, the Lottes HI/LO complement in
+// modes 2-3, lit in mode 0).
+// Modes 2 (bright) / 3 (beam): the stimulus picture is static, so adjacent
+// settled frames must be exact complements through sim/framelock/bfi_lottes.hex
+// (per row and channel the max of the two passes is the table HI and the min
+// is the table LO of one game code), and same-parity frames two apart must be
+// bit-identical. Mode 2 shows the HI side on the same frame for every row
+// (global parity); mode 3 shows it on opposite frames for the top/bottom
+// halves (complementary halves, split at cy 240). Checked on rgb_pre (before
+// video_fx: the bench runs with scanlines on, and both passes get identical
+// downstream processing).
 // BFI mode from -DBFI_MODE (default 1).
 `include "variant.vh"
 `timescale 1ns/1fs
@@ -80,9 +90,14 @@ module tb_frame_lock;
     reg [63:0] wr_last [0:191];
     reg [63:0] wr_prev [0:191];
 `ifdef HZ120
-    // write-frame tags per source line (which game frame wrote them)
-    reg [31:0] wr_frame [0:191];
-    reg [31:0] game_wr = 0;
+    // write-frame tags per source line (which game frame wrote them).
+    // Signed: unwritten lines stay -1 so the >= 0 tag test skips them; the
+    // array was reg [31:0] (unsigned) until the bright/beam rework, which
+    // made every comparison against the signed pass_fmax convert to
+    // unsigned and froze pass_fmax at -1, so no per-frame tag or BFI check
+    // below ever ran.
+    integer wr_frame [0:191];
+    integer game_wr = 0;
 `endif
     integer li;
     initial for (li = 0; li < 192; li = li + 1) begin
@@ -107,12 +122,38 @@ module tb_frame_lock;
 `ifdef HZ120
     integer locked = 0, last_lit = -1, last_event_hdmi = 0;
     integer pass_fmin = 0, pass_fmax = -1, pass_ins = 0;
-    integer lit_nonzero = 0, ins_nonzero = 0, ins_dim_bad = 0, stale_in_frame = 0;
+    integer lit_nonzero = 0, ins_nonzero = 0, stale_in_frame = 0;
     reg [23:0] lit_c [0:524];
     integer ci;
     initial for (ci = 0; ci <= 524; ci = ci + 1) lit_c[ci] = 0;
-    function [23:0] dim(input [23:0] p);      // BFI mode 2: each channel halved
-        dim = {1'b0, p[23:17], 1'b0, p[15:9], 1'b0, p[7:1]};
+    // modes 2/3 (Lottes HI/LO): forward table from bfi_lottes.hex ("HHLL"
+    // per input code); the settled-frame history (static stimulus:
+    // complements adjacent, identical 2 apart).
+    reg [15:0] HEXRAW [0:255];
+    reg [7:0] THI [0:255];
+    reg [7:0] TLO [0:255];
+    reg [23:0] pre_c [0:524];
+    reg [23:0] pre_p [0:524];
+    reg [23:0] pre_pp [0:524];
+    integer have_hist = 0;   // settled Lottes frames captured (0..2+)
+    integer nchk = 0;        // settled mode-2/3 frames with pixel checks
+    initial begin
+        for (ci = 0; ci <= 524; ci = ci + 1) begin
+            pre_c[ci] = 0; pre_p[ci] = 0; pre_pp[ci] = 0;
+        end
+        $readmemh("bfi_lottes.hex", HEXRAW);
+        for (ci = 0; ci < 256; ci = ci + 1) begin
+            THI[ci] = HEXRAW[ci][15:8]; TLO[ci] = HEXRAW[ci][7:0];
+        end
+    end
+    // 1 if (mx, mn) is a table pair for some game code
+    function is_pair(input [7:0] mx, input [7:0] mn);
+        integer c;
+        begin
+            is_pair = 0;
+            for (c = 0; c < 256; c = c + 1)
+                if (THI[c] == mx && TLO[c] == mn) is_pair = 1;
+        end
     endfunction
 `else
     integer locked = 0, settled = 0;
@@ -221,9 +262,16 @@ module tb_frame_lock;
         if (dut.cy == 100 && cy_q != 100) pass_ins <= bfi_eff_ins;
         // BFI check: picture-centre sample (360, cy) on every picture row
         if (dut.cx == 360 && pic_row && locked) begin
-            if (pass_ins) begin
+            if (`BFI_MODE >= 2) begin
+                // Lottes modes carry real picture on both passes: capture
+                // the pre-fx pixel for the exact table check at frame end
+                pre_c[dut.cy] <= dut.rgb_pre;
+                if (dut.rgb_pre != 0) begin
+                    if (pass_ins) ins_nonzero <= ins_nonzero + 1;
+                    else lit_nonzero <= lit_nonzero + 1;
+                end
+            end else if (pass_ins) begin
                 if (`BFI_MODE == 1 && dut.rgb != 0) ins_nonzero <= ins_nonzero + 1;
-                if (`BFI_MODE == 2 && dut.rgb != dim(lit_c[dut.cy])) ins_dim_bad <= ins_dim_bad + 1;
                 if (`BFI_MODE == 0 && dut.rgb != 0) lit_nonzero <= lit_nonzero + 1;
             end else begin
                 lit_c[dut.cy] <= dut.rgb;
@@ -268,10 +316,89 @@ module tb_frame_lock;
                                          ins_nonzero, hdmi_frames);
                                 violations <= violations + 1;
                             end
-                            if (`BFI_MODE == 2 && pass_ins && ins_dim_bad) begin
-                                $display("FAIL: %0d wrong dimmed samples in inserted hdmi frame %0d",
-                                         ins_dim_bad, hdmi_frames);
-                                violations <= violations + 1;
+                            if (`BFI_MODE >= 2) begin : lottes
+                                // Lottes HI/LO: the stimulus picture is static,
+                                // so this frame must be the exact complement of
+                                // the previous settled frame through the hex
+                                // table (per row/channel: max = HI, min = LO
+                                // of one game code), and identical to the
+                                // settled frame two back. Mode 2 carries HI on
+                                // the same frame for every row; mode 3 flips
+                                // it per half (top rows cy<240 vs bottom).
+                                integer r, k, c;
+                                integer side_top, side_bot, side, err;
+                                reg [23:0] a, b;
+                                reg [7:0] ca, cb, mx, mn;
+                                reg ok;
+                                err = 0;
+                                nchk <= nchk + 1;
+                                if (have_hist >= 1) begin
+                                    side_top = -1; side_bot = -1;
+                                    for (r = 48; r < 432 && err == 0; r = r + 1) begin
+                                        a = pre_c[r]; b = pre_p[r];
+                                        for (k = 0; k < 3 && err == 0; k = k + 1) begin
+                                            ca = (a >> (8 * k)) & 8'hff;
+                                            cb = (b >> (8 * k)) & 8'hff;
+                                            mx = ca > cb ? ca : cb;
+                                            mn = ca < cb ? ca : cb;
+                                            ok = 0;
+                                            for (c = 0; c < 256; c = c + 1)
+                                                if (THI[c] == mx && TLO[c] == mn) ok = 1;
+                                            if (!ok) begin
+                                                $display("FAIL: mode-%0d row %0d ch %0d %h/%h not a table pair, in frame %0d",
+                                                         `BFI_MODE, r, k, ca, cb, hdmi_frames);
+                                                err = 1;
+                                            end else if (mx != mn) begin
+                                                side = (ca == mx) ? 1 : 0;
+                                                if (r < 240) begin
+                                                    if (side_top < 0) side_top = side;
+                                                    else if (side_top != side) begin
+                                                        $display("FAIL: mode-%0d HI side flips mid top half at row %0d, in frame %0d",
+                                                                 `BFI_MODE, r, hdmi_frames);
+                                                        err = 1;
+                                                    end
+                                                end else begin
+                                                    if (side_bot < 0) side_bot = side;
+                                                    else if (side_bot != side) begin
+                                                        $display("FAIL: mode-%0d HI side flips mid bottom half at row %0d, in frame %0d",
+                                                                 `BFI_MODE, r, hdmi_frames);
+                                                        err = 1;
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                    if (err == 0 && (side_top < 0 || side_bot < 0)) begin
+                                        $display("FAIL: mode-%0d frame %0d has no discriminating row (all HI==LO)",
+                                                 `BFI_MODE, hdmi_frames);
+                                        err = 1;
+                                    end else if (err == 0 && `BFI_MODE == 2 && side_top != side_bot) begin
+                                        $display("FAIL: mode-2 frame %0d top/bottom HI sides differ (%0d/%0d)",
+                                                 hdmi_frames, side_top, side_bot);
+                                        err = 1;
+                                    end else if (err == 0 && `BFI_MODE == 3 && side_top == side_bot) begin
+                                        $display("FAIL: mode-3 frame %0d top/bottom HI sides agree (%0d)",
+                                                 hdmi_frames, side_top);
+                                        err = 1;
+                                    end
+                                end
+                                if (err == 0 && have_hist >= 2) begin
+                                    for (r = 48; r < 432; r = r + 1) begin
+                                        if (pre_c[r] !== pre_pp[r]) begin
+                                            $display("FAIL: mode-%0d row %0d %h != same-parity frame %h, in frame %0d",
+                                                     `BFI_MODE, r, pre_c[r], pre_pp[r], hdmi_frames);
+                                            err = 1;
+                                            r = 432;
+                                        end
+                                    end
+                                end
+                                if (err) violations <= violations + 1;
+                                // rotate the history
+                                for (r = 48; r < 432; r = r + 1) begin
+                                    pre_pp[r] <= pre_p[r];
+                                    pre_p[r] <= pre_c[r];
+                                end
+                                if (have_hist < 3) have_hist <= have_hist + 1;
                             end
                             if (!pass_ins && !lit_nonzero) begin
                                 $display("FAIL: lit hdmi frame %0d all black at centre", hdmi_frames);
@@ -286,9 +413,16 @@ module tb_frame_lock;
                                 $display("FAIL: %0d stale reads in frame %0d", stale_in_frame, hdmi_frames);
                                 violations <= violations + 1;
                             end
+                        end else begin
+                            // mixed game frames (or none): not a settled
+                            // Lottes pair; drop the history
+                            have_hist <= 0;
                         end
                         if (frame_max_age > run_max_age) run_max_age <= frame_max_age;
                         if (frame_min_age < run_min_age) run_min_age <= frame_min_age;
+                    end else begin
+                        // inside the post-event settle window: drop history
+                        have_hist <= 0;
                     end
                 end
 `else
@@ -324,7 +458,7 @@ module tb_frame_lock;
             frame_max_age <= 0;
 `ifdef HZ120
             pass_fmin <= 0; pass_fmax <= -1;
-            lit_nonzero <= 0; ins_nonzero <= 0; ins_dim_bad <= 0; stale_in_frame <= 0;
+            lit_nonzero <= 0; ins_nonzero <= 0; stale_in_frame <= 0;
 `endif
         end
         if (dut.mem_portB_addr[15:8] != rd_q) begin
@@ -399,6 +533,7 @@ module tb_frame_lock;
         wait (vdp_frames >= 14);
         $display("done: bfi=%0d halted=%0d released=%0d hdmi=%0d vdp=%0d violations=%0d",
                  `BFI_MODE, halt_entered, released, hdmi_frames, vdp_frames, violations);
+        $display("mode checked frames: bright/beam=%0d", nchk);
         $display("audio: max_step=%0d max_repeat=%0d", max_hdmi_step, max_repeat);
         $display("ages sys: min=%0d max=%0d", run_min_age, run_max_age);
         $display("waits sys: min=%0d max=%0d", run_min_wait, run_max_wait);
