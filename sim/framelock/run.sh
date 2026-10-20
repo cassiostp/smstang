@@ -58,9 +58,10 @@ mkdir -p build/negative
 cp build_lock2.out build/negative/
 cp bfi_lottes.hex build/negative/
 sed -i '113s/^../ff/' build/negative/bfi_lottes.hex
-if $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockneg" --user "$(id -u):$(id -g)" -v "$PWD/build/negative:/w" -w /w tangcore-iv:1 sh -c "vvp build_lock2.out"; then
+if $DOCKER_RUN --name "${SIM_PREFIX:-sim$$}_hz120vsms_lockneg" --user "$(id -u):$(id -g)" -v "$PWD/build/negative:/w" -w /w tangcore-iv:1 sh -c "vvp build_lock2.out > neg.log 2>&1"; then
   echo "FAIL: negative control passed with a corrupted table"; exit 1;
 else
+  grep -q "not a table pair" build/negative/neg.log || { echo "FAIL: negative control failed without the pair check"; cat build/negative/neg.log; exit 1; }
   echo "negative control: corrupted table fails as expected"
 fi
 else
