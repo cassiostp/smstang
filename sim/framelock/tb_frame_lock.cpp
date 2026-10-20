@@ -433,10 +433,12 @@ int main(int argc, char **argv) {
                         if (frame_min_age < run_min_age) run_min_age = frame_min_age;
                     }
                 }
+#ifdef HZ120
                 if (locked && (frame_idx - last_event_frame > 6) && pass_fmax >= 0) {
                     hist1 = lit_rgb; lit_rgb = cur_rgb;
                     if (have_hist < 3) have_hist++;
                 } else have_hist = 0;
+#endif
                 frame_idx++;
                 hdmi_frames++;
                 frame_min_age = INT64_MAX;
@@ -500,7 +502,9 @@ int main(int argc, char **argv) {
     }
 
     LOG("done: halted=%d released=%d hdmi=%d vdp=%d violations=%d", halt_entered, released, hdmi_frames, vdp_frames, violations);
+#ifdef HZ120
     LOG("mode checked frames: off=%d black=%d bright=%d beam=%d", nchk[0], nchk[1], nchk[2], nchk[3]);
+#endif
     LOG("audio: max_hdmi_step=%d (bound %d) max_repeat=%d", max_hdmi_step, AUDIO_MAX_STEP, max_repeat);
 #ifdef HZ120
     LOG("wait sys: min=%lld max=%lld (steady theory 2293)", (long long)run_min_wait, (long long)run_max_wait);
