@@ -190,7 +190,6 @@ wire [7:0] ss_din_engine, ss_dout_regs;
 wire ss_we_engine;
 wire ss_freeze, ss_reset_unused, ss_loaded, ss_active;
 wire ss_ram_own = ss_active && ss_freeze; // engine owns NVRAM port A only while frozen
-wire ss_freeze, ss_reset_unused, ss_loaded, ss_active;
 wire [16:0] ss_mem_addr;
 wire [7:0] ss_mem_din, ss_mem_q;
 wire ss_mem_we, ss_mem_req;
