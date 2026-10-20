@@ -665,6 +665,11 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
          mapper_msx_lock0 <= 1'b0;
          mapper_msx_lock <= 1'b0;
          mapper_msx <= 1'b0;
+      end else if (ss_we && (ss_a == 10'h25 || ss_a == 10'h26)) begin
+         if (ss_a == 10'h25)
+            { mapper_msx_lock, mapper_msx } <= ss_din[1:0];
+         else
+            { mapper_msx_check1, mapper_msx_check0 } <= ss_din[1:0];
       end else begin
          if (bootloader_n & (~mapper_msx_lock)) begin
             if (MREQ_n == 1'b0) begin
@@ -707,8 +712,8 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
              10'h22: bank2 <= ss_din;
              10'h23: bank3 <= ss_din;
              10'h24: { nvram_cme, nvram_p, nvram_ex, nvram_e } <= ss_din[3:0];
-             10'h25: { mapper_codies_lock, mapper_codies, lock_mapper_B, mapper_msx_lock, mapper_msx } <= ss_din[4:0];
-             10'h26: { mapper_msx_check1, mapper_msx_check0 } <= ss_din[1:0];
+             10'h25: { mapper_codies_lock, mapper_codies, lock_mapper_B } <= ss_din[4:2];
+
              10'h27: last_read_addr[7:0] <= ss_din;
              10'h28: last_read_addr[15:8] <= ss_din;
              default: ;

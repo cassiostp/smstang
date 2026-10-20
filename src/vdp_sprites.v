@@ -147,6 +147,7 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
                  10'h73: data_address[7:0] <= ss_din;
                  10'h74: data_address[13:8] <= ss_din[5:0];
                  10'h75: m2_flags <= ss_din;
+                 10'h9F: overflow <= ss_din[6];
                  10'h76: { enable[7], enable[6], enable[5], enable[4], enable[3], enable[2], enable[1], enable[0] } <= ss_din;
                  default: begin
                      if (ss_a >= 10'h77 && ss_a < 10'h77 + MAX_SPPL + 1)
@@ -338,7 +339,7 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
       integer           i;
 
       if (ss_we && ss_a == 10'h9F) begin
-             { collide, overflow, color } <= { ss_din[7], ss_din[6], ss_din[5:2] };
+             { collide, color } <= { ss_din[7], ss_din[5:2] };
           end else if (ce_pix) begin		// ce_vdp?? 
          color <= {4{1'b0}};
          collision = {8{1'b0}};
