@@ -298,42 +298,42 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
        end
     end
 
-    // CPU readback from the live T80 (combinational)
     reg [7:0] ss_cpu_dout;
-    always @* begin
+    // Save-state CPU readback, registered (pipeline stage; engine waits via rdy)
+    always @(posedge clk_sys) begin
        case (ss_a)
-           10'h00: ss_cpu_dout = ss_reg[7:0];
-           10'h01: ss_cpu_dout = ss_reg[15:8];
-           10'h02: ss_cpu_dout = ss_reg[23:16];
-           10'h03: ss_cpu_dout = ss_reg[31:24];
-           10'h04: ss_cpu_dout = ss_reg[39:32];
-           10'h05: ss_cpu_dout = ss_reg[47:40];
-           10'h06: ss_cpu_dout = ss_reg[55:48];
-           10'h07: ss_cpu_dout = ss_reg[63:56];
-           10'h08: ss_cpu_dout = ss_reg[71:64];
-           10'h09: ss_cpu_dout = ss_reg[79:72];
-           10'h0A: ss_cpu_dout = ss_reg[87:80];
-           10'h0B: ss_cpu_dout = ss_reg[95:88];
-           10'h0C: ss_cpu_dout = ss_reg[103:96];
-           10'h0D: ss_cpu_dout = ss_reg[111:104];
-           10'h0E: ss_cpu_dout = ss_reg[119:112];
-           10'h0F: ss_cpu_dout = ss_reg[127:120];
-           10'h10: ss_cpu_dout = ss_reg[135:128];
-           10'h11: ss_cpu_dout = ss_reg[143:136];
-           10'h12: ss_cpu_dout = ss_reg[151:144];
-           10'h13: ss_cpu_dout = ss_reg[159:152];
-           10'h14: ss_cpu_dout = ss_reg[167:160];
-           10'h15: ss_cpu_dout = ss_reg[175:168];
-           10'h16: ss_cpu_dout = ss_reg[183:176];
-           10'h17: ss_cpu_dout = ss_reg[191:184];
-           10'h18: ss_cpu_dout = ss_reg[199:192];
-           10'h19: ss_cpu_dout = ss_reg[207:200];
-           10'h1A: ss_cpu_dout = {4'b0, ss_reg[211:208]};
-           10'h1B: ss_cpu_dout = ss_misc[7:0];
-           10'h1C: ss_cpu_dout = ss_misc[15:8];
-           10'h1D: ss_cpu_dout = {ss_mc, ss_ts, 2'b0};
-           10'h1E: ss_cpu_dout = {5'b0, M1_n, ss_misc[17:16]};
-           default: ss_cpu_dout = 8'b0;
+           10'h00: ss_cpu_dout <= ss_reg[7:0];
+           10'h01: ss_cpu_dout <= ss_reg[15:8];
+           10'h02: ss_cpu_dout <= ss_reg[23:16];
+           10'h03: ss_cpu_dout <= ss_reg[31:24];
+           10'h04: ss_cpu_dout <= ss_reg[39:32];
+           10'h05: ss_cpu_dout <= ss_reg[47:40];
+           10'h06: ss_cpu_dout <= ss_reg[55:48];
+           10'h07: ss_cpu_dout <= ss_reg[63:56];
+           10'h08: ss_cpu_dout <= ss_reg[71:64];
+           10'h09: ss_cpu_dout <= ss_reg[79:72];
+           10'h0A: ss_cpu_dout <= ss_reg[87:80];
+           10'h0B: ss_cpu_dout <= ss_reg[95:88];
+           10'h0C: ss_cpu_dout <= ss_reg[103:96];
+           10'h0D: ss_cpu_dout <= ss_reg[111:104];
+           10'h0E: ss_cpu_dout <= ss_reg[119:112];
+           10'h0F: ss_cpu_dout <= ss_reg[127:120];
+           10'h10: ss_cpu_dout <= ss_reg[135:128];
+           10'h11: ss_cpu_dout <= ss_reg[143:136];
+           10'h12: ss_cpu_dout <= ss_reg[151:144];
+           10'h13: ss_cpu_dout <= ss_reg[159:152];
+           10'h14: ss_cpu_dout <= ss_reg[167:160];
+           10'h15: ss_cpu_dout <= ss_reg[175:168];
+           10'h16: ss_cpu_dout <= ss_reg[183:176];
+           10'h17: ss_cpu_dout <= ss_reg[191:184];
+           10'h18: ss_cpu_dout <= ss_reg[199:192];
+           10'h19: ss_cpu_dout <= ss_reg[207:200];
+           10'h1A: ss_cpu_dout <= {4'b0, ss_reg[211:208]};
+           10'h1B: ss_cpu_dout <= ss_misc[7:0];
+           10'h1C: ss_cpu_dout <= ss_misc[15:8];
+           10'h1D: ss_cpu_dout <= {ss_mc, ss_ts, 2'b0};
+           10'h1E: ss_cpu_dout <= {5'b0, M1_n, ss_misc[17:16]};
+           default: ss_cpu_dout <= 8'b0;
        endcase
     end
 
@@ -813,25 +813,25 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
     assign ss_supported = !systeme && !fm_touched;
 
 
-    // Mapper/system readback (combinational)
     reg [7:0] ss_map_dout;
-    always @* begin
+    // Save-state mapper readback, registered (pipeline stage)
+    always @(posedge clk_sys) begin
        case (ss_a)
-           10'h20: ss_map_dout = bank0;
-           10'h21: ss_map_dout = bank1;
-           10'h22: ss_map_dout = bank2;
-           10'h23: ss_map_dout = bank3;
-           10'h24: ss_map_dout = {4'b0, nvram_cme, nvram_p, nvram_ex, nvram_e};
-           10'h25: ss_map_dout = {3'b0, mapper_codies_lock, mapper_codies, lock_mapper_B, mapper_msx_lock, mapper_msx};
-           10'h26: ss_map_dout = {6'b0, mapper_msx_check1, mapper_msx_check0};
-           10'h27: ss_map_dout = last_read_addr[7:0];
-           10'h28: ss_map_dout = last_read_addr[15:8];
-           10'h29: ss_map_dout = {5'b0, det_D};
-           10'h2A: ss_map_dout = PSG_mux;
-           10'h2B: ss_map_dout = {7'b0, fm_a};
-           10'h2C: ss_map_dout = fm_d;
-           10'h2D: ss_map_dout = {7'b0, bootloader_n};
-           default: ss_map_dout = 8'b0;
+           10'h20: ss_map_dout <= bank0;
+           10'h21: ss_map_dout <= bank1;
+           10'h22: ss_map_dout <= bank2;
+           10'h23: ss_map_dout <= bank3;
+           10'h24: ss_map_dout <= {4'b0, nvram_cme, nvram_p, nvram_ex, nvram_e};
+           10'h25: ss_map_dout <= {3'b0, mapper_codies_lock, mapper_codies, lock_mapper_B, mapper_msx_lock, mapper_msx};
+           10'h26: ss_map_dout <= {6'b0, mapper_msx_check1, mapper_msx_check0};
+           10'h27: ss_map_dout <= last_read_addr[7:0];
+           10'h28: ss_map_dout <= last_read_addr[15:8];
+           10'h29: ss_map_dout <= {5'b0, det_D};
+           10'h2A: ss_map_dout <= PSG_mux;
+           10'h2B: ss_map_dout <= {7'b0, fm_a};
+           10'h2C: ss_map_dout <= fm_d;
+           10'h2D: ss_map_dout <= {7'b0, bootloader_n};
+           default: ss_map_dout <= 8'b0;
        endcase
     end   
    always @* begin

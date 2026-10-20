@@ -61,7 +61,10 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
     wire [7:0] ss_cram_byte = ss_a[0] ? {4'b0, cram_ss_rq[11:8]} : cram_ss_rq[7:0];
     wire ss_cram_rd = (ss_a >= 10'hC0) && (ss_a <= 10'hFF);
     wire ss_sub = (ss_a >= 10'h60) && (ss_a < 10'hC0);
-    assign ss_dout = (ss_a == 10'h40) ? {display_on, disable_hscroll, disable_vscroll, mask_column0, irq_frame_en, irq_line_en, spr_shift, spr_tall} :
+    // Save-state readback, registered: one pipeline stage splits the
+    // scan mux for timing (the engine waits the extra cycle via rdy).
+    reg [7:0] ss_dout_q = 0;
+    always @(posedge clk_sys) ss_dout_q <= (ss_a == 10'h40) ? {display_on, disable_hscroll, disable_vscroll, mask_column0, irq_frame_en, irq_line_en, spr_shift, spr_tall} :
                      (ss_a == 10'h41) ? {spr_wide, mode_M4, mode_M3, mode_M2, mode_M1, to_cram, address_ff, data_write} :
                      (ss_a == 10'h42) ? {overscan, bg_address} :
                      (ss_a == 10'h43) ? {5'b0, m2mg_address} :
@@ -86,6 +89,7 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
                      (ss_a == 10'h56) ? xspr_collide_shift[7:0] :
                      ss_cram_rd ? ss_cram_byte :
                      ss_sub ? ss_main : 8'b0;
+    assign ss_dout = ss_dout_q;
    
    // vram and cram lines for the cpu interface
    wire [14:0]   vram_cpu_A;

@@ -175,11 +175,15 @@ always @* begin
     endcase
 end
 
-assign ss_dout = ss_tone_regs ? ss_regs_dout :
+// Save-state readback, registered: one pipeline stage splits the
+// scan mux for timing (the engine waits the extra cycle via rdy).
+reg [7:0] ss_dout_q = 0;
+always @(posedge clk) ss_dout_q <= ss_tone_regs ? ss_regs_dout :
                  ss_tone0_sel ? ss_tone0 :
                  ss_tone1_sel ? ss_tone1 :
                  ss_tone2_sel ? ss_tone2 :
                  ss_noise_sel ? ss_noise : 8'b0;
+assign ss_dout = ss_dout_q;
 
 jt89_tone u_tone0(
     .clk    ( clk       ),

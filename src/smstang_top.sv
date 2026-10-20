@@ -245,6 +245,11 @@ wire ce_sp_g  = ce_sp  & ~pause_menu & ~frame_halt & ~ss_freeze;
 // Save-state engine (src/savestate_sms.v): streams VRAM/WRAM/NVRAM +
 // registers while ss_freeze holds the ce grid, like pause_menu.
 wire ss_freeze, ss_reset, ss_loaded, ss_active;
+// Bulk-RAM ownership: the engine drives VRAM/WRAM/NVRAM only while the
+// machine is frozen (S_HDR/S_RESET/S_SAVE/S_LOAD/SETTLE). During S_WAIT
+// the game still runs, so it keeps its ports; the engine issues no memory
+// ops until frozen. (Muxing on ss_active alone corrupted game reads.)
+wire ss_ram_own = ss_active && ss_freeze;
 wire ss_snd_rst;
 wire [9:0] ss_a;
 wire [7:0] ss_din;
@@ -257,7 +262,7 @@ wire ss_mem_we, ss_mem_req, ss_mem_ack;
 wire [1:0] ss_mem_sel = ss_mem_addr[16:15];
 wire [14:0] ss_mem_ad = ss_mem_addr[14:0];
 wire [13:0] ss_vram_a = ss_mem_ad[13:0];
-wire ss_vram_we = ss_active && (ss_mem_sel == 2'd0) && ss_mem_we;
+wire ss_vram_we = ss_ram_own && (ss_mem_sel == 2'd0) && ss_mem_we;
 wire [7:0] ss_vram_d = ss_mem_din;
 wire [7:0] ss_vram_q;
 assign ss_dout = ss_dout_sys | ss_dout_vid;
@@ -328,7 +333,7 @@ system #(63) system
 	.nvram_q(nvram_q),
  	.ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_dout_sys),
  	.ss_point(ss_point), .ss_supported(ss_supported), .VBlank(VBlank),
- 	.ss_active_sys(ss_active), .ss_vram_a(ss_vram_a), .ss_vram_we(ss_vram_we),
+ 	.ss_active_sys(ss_ram_own), .ss_vram_a(ss_vram_a), .ss_vram_we(ss_vram_we),
  	.ss_vram_d(ss_vram_d), .ss_vram_q(ss_vram_q),
  	.ss_snd_rst(ss_snd_rst),
 
@@ -431,9 +436,9 @@ spram #(.widthad_a(14)) ram_inst
 (
 	.clock     (clk_sys),
 	// Engine bulk port (ss_active: frozen, game idle) onto low 8 KB
-	.address   (ss_active ? ((ss_mem_sel == 2'd1) ? {1'b0, ss_mem_ad[12:0]} : 14'b0) : (systeme ? ram_a : {1'b0,ram_a[12:0]})),
-	.wren      (ss_active ? ((ss_mem_sel == 2'd1) & ss_mem_we) : ram_we),
-	.data      (ss_active ? ss_mem_din : ram_d),
+	.address   (ss_ram_own ? ((ss_mem_sel == 2'd1) ? {1'b0, ss_mem_ad[12:0]} : 14'b0) : (systeme ? ram_a : {1'b0,ram_a[12:0]})),
+	.wren      (ss_ram_own ? ((ss_mem_sel == 2'd1) & ss_mem_we) : ram_we),
+	.data      (ss_ram_own ? ss_mem_din : ram_d),
 	.q         (ram_q)
 );
 
@@ -442,9 +447,9 @@ spram #(.widthad_a(14)) ram_inst
 dpram #(.widthad_a(15)) nvram_inst
 (
 	.clock_a     (clk_sys),
-	.address_a   (ss_active ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : nvram_a),
-	.wren_a      (ss_active ? ((ss_mem_sel == 2'd2) & ss_mem_we) : nvram_we),
-	.data_a      (ss_active ? ss_mem_din : nvram_d),
+	.address_a   (ss_ram_own ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : nvram_a),
+	.wren_a      (ss_ram_own ? ((ss_mem_sel == 2'd2) & ss_mem_we) : nvram_we),
+	.data_a      (ss_ram_own ? ss_mem_din : nvram_d),
 	.q_a         (nvram_q),
 	.clock_b     (clk_sys),
 	.address_b   (sv_addr),

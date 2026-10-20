@@ -73,7 +73,10 @@ module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu
    // signal gg_sctrl:	std_logic_vector(7 downto 3) $ "00111";
    
     // Save-state readback (combinational)
-    assign ss_dout = (ss_a == 10'h30) ? ctrl :
+    // Save-state readback, registered: one pipeline stage splits the
+    // scan mux for timing (the engine waits the extra cycle via rdy).
+    reg [7:0] ss_dout_q = 0;
+    always @(posedge clk) ss_dout_q <= (ss_a == 10'h30) ? ctrl :
                      (ss_a == 10'h31) ? gg_ddr :
                      (ss_a == 10'h32) ? gg_txd :
                      (ss_a == 10'h33) ? gg_rxd :
@@ -81,6 +84,7 @@ module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu
                      (ss_a == 10'h35) ? {6'b0, j2_th_dir, j1_th_dir} :
                      (ss_a == 10'h36) ? {5'b0, analog_select, analog_player, analog_upper} :
                      8'b0;
+    assign ss_dout = ss_dout_q;
 
    always @(posedge clk or negedge RESET_n)
       if (RESET_n == 1'b0) begin

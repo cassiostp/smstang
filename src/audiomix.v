@@ -16,7 +16,11 @@ module AudioMix(clk, reset_n, audio_in_l1, audio_in_l2, audio_in_r1, audio_in_r2
    input [7:0] ss_din;
    input ss_we;
    output [7:0] ss_dout;
-   assign ss_dout = (ss_a == 10'h3D) ? {7'b0, toggle} : 8'b0;
+   // Save-state readback, registered: one pipeline stage splits the
+   // scan mux for timing (the engine waits the extra cycle via rdy).
+   reg [7:0] ss_dout_q = 0;
+   always @(posedge clk) ss_dout_q <= (ss_a == 10'h3D) ? {7'b0, toggle} : 8'b0;
+   assign ss_dout = ss_dout_q;
    
    wire signed [15:0]   in1;
    wire signed [15:0]   in2;

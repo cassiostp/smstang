@@ -31,12 +31,16 @@ module video(clk, ce_pix, pal, border, ggres, mask_column, cut_mask, smode_M1, s
    wire [8:0]   hbl_st;
    wire [8:0]   hbl_end;
     // Save-state readback (combinational)
-    assign ss_dout = (ss_a == 10'h38) ? hcount[7:0] :
+    // Save-state readback, registered: one pipeline stage splits the
+    // scan mux for timing (the engine waits the extra cycle via rdy).
+    reg [7:0] ss_dout_q = 0;
+    always @(posedge clk) ss_dout_q <= (ss_a == 10'h38) ? hcount[7:0] :
                      (ss_a == 10'h39) ? {7'b0, hcount[8]} :
                      (ss_a == 10'h3A) ? vcount[7:0] :
                      (ss_a == 10'h3B) ? {7'b0, vcount[8]} :
                      (ss_a == 10'h3C) ? {hsync, vsync, hblank, vblank, 4'b0} :
                      8'b0;
+    assign ss_dout = ss_dout_q;
    
    always @(posedge clk) begin
                if (ss_we) begin

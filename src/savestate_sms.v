@@ -171,7 +171,7 @@ reg        pend_we = 0;
 // Fast-path (header/register) read completion, 1 clk after the strobe.
 reg        fast_rdy = 0;
 reg [7:0]  fast_q = 0;
-reg        fast_sel = 0;   // 1: fast_q (header/dout), 0: ss_regs readback
+reg        fast_pipe = 0;  // register-read pipe: module dout regs settle
 
 // Address translation for a byte in a memory section: {sel,addr} for the
 // top adapter (0 VRAM, 1 WRAM, 2 NVRAM).
@@ -213,6 +213,7 @@ always @(posedge clk) begin
         resync <= 0;
         rd_lat <= 0;
         fast_rdy <= 0;
+        fast_pipe <= 0;
         wdog <= 0;
         wait_cnt <= 0;
         settle_cnt <= 0;
@@ -273,6 +274,7 @@ always @(posedge clk) begin
                 ss_reset <= 0;
                 img_rdy <= 0;
                 fast_rdy <= 0;
+                fast_pipe <= 0;
                 wr_pend <= 0;
                 rd_pend <= 0;
                 rd_out <= 0;
@@ -290,6 +292,7 @@ always @(posedge clk) begin
             ss_reset <= 0;
             img_rdy <= 0;
             fast_rdy <= 0;
+            fast_pipe <= 0;
             wr_pend <= 0;
             rd_pend <= 0;
             rd_out <= 0;
@@ -401,6 +404,7 @@ always @(posedge clk) begin
         if (img_abort) begin
             img_rdy <= 0;
             fast_rdy <= 0;
+            fast_pipe <= 0;
             rd_pend <= 0;
             rd_out <= 0;
             mem_we <= 0;
@@ -412,19 +416,22 @@ always @(posedge clk) begin
                 if (img_raddr < 20'd512) begin
                     fast_q <= hdr_byte(img_raddr[8:0]);
                     fast_rdy <= 1;
-                    fast_sel <= 1;
                 end else if (img_raddr < sec_reg_end) begin
                     ss_a <= (img_raddr - 20'd512);
-                    fast_rdy <= 1;      // ss_dout valid combinationally next clk
-                    fast_sel <= 0;
+                    fast_pipe <= 1;     // module dout regs settle next clk
                 end else begin
                     rd_pend <= 1;
                     pend_addr <= mem_translate(img_raddr);
                     pend_we <= 0;
                 end
             end
+            if (fast_pipe && !img_taken) begin
+                fast_q <= ss_dout;
+                fast_rdy <= 1;
+                fast_pipe <= 0;
+            end
             if (fast_rdy && !img_taken) begin
-                img_q <= fast_sel ? fast_q : ss_dout;
+                img_q <= fast_q;
                 img_rdy <= 1;
                 fast_rdy <= 0;
             end

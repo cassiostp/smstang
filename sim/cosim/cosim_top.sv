@@ -189,6 +189,8 @@ wire [9:0] ss_a;
 wire [7:0] ss_din_engine, ss_dout_regs;
 wire ss_we_engine;
 wire ss_freeze, ss_reset_unused, ss_loaded, ss_active;
+wire ss_ram_own = ss_active && ss_freeze; // engine owns NVRAM port A only while frozen
+wire ss_freeze, ss_reset_unused, ss_loaded, ss_active;
 wire [16:0] ss_mem_addr;
 wire [7:0] ss_mem_din, ss_mem_q;
 wire ss_mem_we, ss_mem_req;
@@ -258,9 +260,9 @@ savestate_sms ss_engine (
 
 dpram #(.widthad_a(15)) nvram (
     .clock_a(clk),
-    .address_a(ss_active ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : addrA),
-    .wren_a(ss_active ? ((ss_mem_sel == 2'd2) & ss_mem_we) : weA),
-    .data_a(ss_active ? ss_mem_din : dinA),
+    .address_a(ss_ram_own ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : addrA),
+    .wren_a(ss_ram_own ? ((ss_mem_sel == 2'd2) & ss_mem_we) : weA),
+    .data_a(ss_ram_own ? ss_mem_din : dinA),
     .q_a(game_q),
     .clock_b(clk),
     .address_b(sv_addr),

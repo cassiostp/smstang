@@ -28,7 +28,10 @@ module vdp_background(
     // Save-state bytes 0x60-0x6F (frozen only): x, tile_index,
     // {tile_y,palette,priority_latch,flip_x}, datac, data0-3,
     // shift0-3, {palette_reg,PRIORITY}
-    assign ss_dout = (ss_a == 10'h60) ? x :
+    // Save-state readback, registered: one pipeline stage splits the
+    // scan mux for timing (the engine waits the extra cycle via rdy).
+    reg [7:0] ss_dout_q = 0;
+    always @(posedge clk_sys) ss_dout_q <= (ss_a == 10'h60) ? x :
                      (ss_a == 10'h61) ? tile_index[7:0] :
                      (ss_a == 10'h62) ? {7'b0, tile_index[8]} :
                      (ss_a == 10'h63) ? {tile_y, palette, priority_latch, flip_x, 2'b0} :
@@ -45,6 +48,7 @@ module vdp_background(
                      8'b0;   
    
    reg [8:0]     tile_index;
+    assign ss_dout = ss_dout_q;
    reg [7:0]     x;
    reg [2:0]     tile_y;
    reg           palette;
