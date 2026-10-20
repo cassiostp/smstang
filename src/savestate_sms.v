@@ -171,7 +171,7 @@ reg        pend_we = 0;
 // Fast-path (header/register) read completion, 1 clk after the strobe.
 reg        fast_rdy = 0;
 reg [7:0]  fast_q = 0;
-reg        fast_pipe = 0;  // register-read pipe: module dout regs settle
+reg [2:0]  fast_pipe = 0; // read pipe: ss_a -> module regs -> submodule regs -> fast_q
 
 // Address translation for a byte in a memory section: {sel,addr} for the
 // top adapter (0 VRAM, 1 WRAM, 2 NVRAM).
@@ -418,17 +418,23 @@ always @(posedge clk) begin
                     fast_rdy <= 1;
                 end else if (img_raddr < sec_reg_end) begin
                     ss_a <= (img_raddr - 20'd512);
-                    fast_pipe <= 1;     // module dout regs settle next clk
+                    fast_pipe <= 3'b001; // dout regs settle (2 stages worst case)
                 end else begin
                     rd_pend <= 1;
                     pend_addr <= mem_translate(img_raddr);
                     pend_we <= 0;
                 end
             end
-            if (fast_pipe && !img_taken) begin
+            if (fast_pipe[0] && !img_taken) begin
+                fast_pipe <= 3'b010;
+            end
+            if (fast_pipe[1] && !img_taken) begin
+                fast_pipe <= 3'b100;
+            end
+            if (fast_pipe[2] && !img_taken) begin
                 fast_q <= ss_dout;
                 fast_rdy <= 1;
-                fast_pipe <= 0;
+                fast_pipe <= 3'b000;
             end
             if (fast_rdy && !img_taken) begin
                 img_q <= fast_q;

@@ -280,6 +280,33 @@ begin
 end
 endtask
 
+task reread(input integer addr);
+begin
+   tb_raddr <= addr;
+   @(posedge clk_sys);
+   tb_rd_stb <= 1;
+   @(posedge clk_sys);
+   tb_rd_stb <= 0;
+   timeout = 0;
+   while (!ss_img_rdy && timeout < 10000) begin
+      @(posedge clk_sys);
+      timeout = timeout + 1;
+   end
+   $display("reread imgaddr=%0d ssa=%0d fastq=%02x sprq=%02x live=%02x", addr,
+      eng.ss_a, eng.fast_q, sys.vdp_inst.vdp_main_inst.vdp_spr_inst.ss_dout_q,
+      (addr == 627) ? sys.vdp_inst.vdp_main_inst.vdp_spr_inst.data_address[7:0] :
+      (addr == 628) ? {2'b0, sys.vdp_inst.vdp_main_inst.vdp_spr_inst.data_address[13:8]} :
+      (addr == 639) ? sys.vdp_inst.vdp_main_inst.vdp_spr_inst.spr_d0[0] :
+      (addr == 640) ? sys.vdp_inst.vdp_main_inst.vdp_spr_inst.spr_d0[1] :
+      (addr == 612) ? sys.vdp_inst.vdp_main_inst.vdp_bg_inst.datac :
+                      sys.vdp_inst.vdp_main_inst.vdp_bg_inst.data0);
+   @(posedge clk_sys);
+   tb_taken <= 1;
+   @(posedge clk_sys);
+   tb_taken <= 0;
+end
+endtask
+
 task eng_load_block(input integer blk, input integer base, input integer corrupt);
 integer b;
 reg [7:0] v;
@@ -408,6 +435,17 @@ always @(posedge clk_sys) begin
       $display("eng %0d->%0d was_load=%b err=%b freeze=%b loaded=%b t=%0t", state_prev, eng.state, eng.was_load, eng.err, ss_freeze, ss_loaded, $time);
       state_prev <= eng.state;
    end
+   if (eng.state == 3'd2 && state_prev != 3'd2) begin
+      $display("freeze-state: x=%0d y=%0d bgx=%0d tidx=%0d data0=%02x sstate=%0d scnt=%0d sidx=%0d daddr=%04x d0_1=%02x",
+         x, y, sys.vdp_inst.vdp_main_inst.vdp_bg_inst.x,
+         sys.vdp_inst.vdp_main_inst.vdp_bg_inst.tile_index,
+         sys.vdp_inst.vdp_main_inst.vdp_bg_inst.data0,
+         sys.vdp_inst.vdp_main_inst.vdp_spr_inst.state,
+         sys.vdp_inst.vdp_main_inst.vdp_spr_inst.count,
+         sys.vdp_inst.vdp_main_inst.vdp_spr_inst.index,
+         sys.vdp_inst.vdp_main_inst.vdp_spr_inst.data_address,
+         sys.vdp_inst.vdp_main_inst.vdp_spr_inst.spr_d0[1]);
+   end
 end
 
 // ce_pix per frame (exact video rate check)
@@ -478,6 +516,7 @@ initial begin
    $display("A: saved %0d bytes, header %02x%02x%02x%02x total=%0d", 115*512,
       imgA[0], imgA[1], imgA[2], imgA[3],
       {imgA[18], imgA[17], imgA[16]} & 19'h7FFFF);
+   $display("A-img 0x70-0x76: %02x %02x %02x %02x %02x %02x %02x", imgA[624], imgA[625], imgA[626], imgA[627], imgA[628], imgA[629], imgA[630]);
    // continue to frame 75, hashing each frame
    for (f = 41; f <= 75; f = f + 1) begin
       wait_frames(1);
@@ -525,6 +564,10 @@ initial begin
       $display("FAIL: ss_loaded never pulsed");
       errors = errors + 1;
    end
+   $display("post-load live: data0=%02x daddr=%04x d0_1=%02x (imgA 00,001c,00)",
+      sys.vdp_inst.vdp_main_inst.vdp_bg_inst.data0,
+      sys.vdp_inst.vdp_main_inst.vdp_spr_inst.data_address,
+      sys.vdp_inst.vdp_main_inst.vdp_spr_inst.spr_d0[1]);
    for (f = 41; f <= 75; f = f + 1) begin
       wait_frames(1);
       vhB[f] = frame_vh;
@@ -551,6 +594,8 @@ initial begin
       timeout = timeout + 1;
    end
    for (f = 0; f < 115; f = f + 1) eng_save_block(f, 2);
+   // directed re-reads of suspect bytes (still frozen in S_SAVE)
+   reread(627); reread(628); reread(639); reread(640); reread(612); reread(613);
    eng_op(3'd3);
    for (i = 0; i < TOTAL; i = i + 1) begin
       if (imgB2[i] !== imgA2[i]) begin
