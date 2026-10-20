@@ -22,7 +22,8 @@ module iosys_bl616 #(
     // The response-type byte on the wire IS the TX state number (see SEND_HEADER), which
     // is why 0x0A/0x0B are the next free states. SAVE_IF=0 elaborates none of this.
     parameter SAVE_IF=0,
-    parameter SAVE_AW=11                // save RAM address width in bytes (11 = 2 KB    // SAVE-STATE INTERFACE (SS_IF=1): a second 512-byte block channel, to the
+    parameter SAVE_AW=11,               // save RAM address width in bytes (11 = 2 KB)
+    // SAVE-STATE INTERFACE (SS_IF=1): a second 512-byte block channel, to the
     // core's savestate engine (src/savestate_sms.v) instead of battery RAM.
     //   MCU -> FPGA 0x18 op                    0 query, 1 begin-save, 2 begin-load, 3 end, 4 abort
     //   MCU -> FPGA 0x19 blk[15:0] <512 bytes>  load one state block
@@ -31,7 +32,6 @@ module iosys_bl616 #(
     //   FPGA -> MCU 0x0F blk[15:0] <512 bytes>  the requested state block
     // Cores without SS_IF consume 0x18-0x1A as unknown frames and stay silent.
     parameter SS_IF=0
-)
 )
 (
     input clk,                      // main logic clock
