@@ -147,8 +147,7 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
                  10'h73: data_address[7:0] <= ss_din;
                  10'h74: data_address[13:8] <= ss_din[5:0];
                  10'h75: m2_flags <= ss_din;
-                 10'h76: for (ss_i = 0; ss_i <= MAX_SPPL; ss_i = ss_i + 1)
-                             enable[ss_i] <= ss_din[ss_i];
+                 10'h76: { enable[7], enable[6], enable[5], enable[4], enable[3], enable[2], enable[1], enable[0] } <= ss_din;
                  default: begin
                      if (ss_a >= 10'h77 && ss_a < 10'h77 + MAX_SPPL + 1)
                          spr_x[ss_a - 10'h77] <= ss_din;

@@ -192,7 +192,7 @@ wire ss_freeze, ss_reset_unused, ss_loaded, ss_active;
 wire [16:0] ss_mem_addr;
 wire [7:0] ss_mem_din, ss_mem_q;
 wire ss_mem_we, ss_mem_req;
-wire [1:0] ss_op;
+wire [2:0] ss_op;
 wire ss_op_stb;
 wire [127:0] ss_status;
 wire [19:0] ss_img_raddr, ss_img_waddr;

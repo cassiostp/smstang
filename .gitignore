@@ -7,3 +7,4 @@ src/usb_hid_host_firmware/ukp.lst
 sim/savestate/build/
 sim/savestate/prog.hex
 sim/savestate/mboot.hex
+sim/savestate/opll_idle/build/

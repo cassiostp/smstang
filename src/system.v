@@ -665,11 +665,6 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
          mapper_msx_lock0 <= 1'b0;
          mapper_msx_lock <= 1'b0;
          mapper_msx <= 1'b0;
-      end else if (ss_we && (ss_a == 10'h25 || ss_a == 10'h26)) begin
-         if (ss_a == 10'h25)
-            { mapper_codies_lock, mapper_codies, lock_mapper_B, mapper_msx_lock, mapper_msx } <= ss_din[4:0];
-         else
-            { mapper_msx_check1, mapper_msx_check0 } <= ss_din[1:0];
       end else begin
          if (bootloader_n & (~mapper_msx_lock)) begin
             if (MREQ_n == 1'b0) begin
