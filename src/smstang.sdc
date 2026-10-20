@@ -11,5 +11,5 @@ set_multicycle_path 1 -hold -start -from [get_pins {system/z80_inst/**/*}] -to [
 # clocks per byte; the taken/ready handshake spans many cycles), so a
 # 2-cycle setup is conservative. Game timing is untouched (ss_freeze is 0
 # unless a transfer runs). Same pattern as the T80 relax above.
-set_multicycle_path 2 -setup -from [get_pins {ss_engine/ss_a*}] -to [get_pins {ss_engine/img_q*}]
-set_multicycle_path 1 -hold -from [get_pins {ss_engine/ss_a*}] -to [get_pins {ss_engine/img_q*}]
+set_multicycle_path 2 -setup -from [get_pins {ss_engine/ss_a[*]}] -to [get_pins {ss_engine/img_q[*]}]
+set_multicycle_path 1 -hold -from [get_pins {ss_engine/ss_a[*]}] -to [get_pins {ss_engine/img_q[*]}]
