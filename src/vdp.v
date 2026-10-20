@@ -1,5 +1,17 @@
 
-module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, WR_n, IRQ_n, WR_direct, A_direct, A, D_in, D_out, x, y, color, palettemode, y1, mask_column, black_column, smode_M1, smode_M2, smode_M3, smode_M4, ysj_quirk, reset_n);
+module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, WR_n, IRQ_n, WR_direct, A_direct, A, D_in, D_out, x, y, color, palettemode, y1, mask_column, black_column, smode_M1, smode_M2, smode_M3, smode_M4, ysj_quirk, reset_n, ss_a, ss_din, ss_we, ss_dout, ss_active, ss_vram_a, ss_vram_we, ss_vram_d, ss_vram_q);
+    // Save-state interface (smstang savestates, frozen only).
+    // Register window 0x40-0x56, CRAM 0xC0-0xFF, submodules 0x60-0xBF.
+    // ss_vram_* is the engine's bulk port onto VRAM port A (low 16 KB).
+    input [9:0] ss_a;
+    input [7:0] ss_din;
+    input ss_we;
+    output [7:0] ss_dout;
+    input ss_active;
+    input [13:0] ss_vram_a;
+    input ss_vram_we;
+    input [7:0] ss_vram_d;
+    output [7:0] ss_vram_q;
    parameter     MAX_SPPL = 7;
    input         clk_sys;
    input         ce_vdp;
@@ -44,6 +56,36 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
    reg           to_cram;
    wire          spr_collide;
    wire          spr_overflow;
+    wire [7:0] ss_main;
+    // Save-state readback (combinational; CRAM via the scan port)
+    wire [7:0] ss_cram_byte = ss_a[0] ? {4'b0, cram_ss_rq[11:8]} : cram_ss_rq[7:0];
+    wire ss_cram_rd = (ss_a >= 10'hC0) && (ss_a <= 10'hFF);
+    wire ss_sub = (ss_a >= 10'h60) && (ss_a < 10'hC0);
+    assign ss_dout = (ss_a == 10'h40) ? {display_on, disable_hscroll, disable_vscroll, mask_column0, irq_frame_en, irq_line_en, spr_shift, spr_tall} :
+                     (ss_a == 10'h41) ? {spr_wide, mode_M4, mode_M3, mode_M2, mode_M1, to_cram, address_ff, data_write} :
+                     (ss_a == 10'h42) ? {overscan, bg_address} :
+                     (ss_a == 10'h43) ? {5'b0, m2mg_address} :
+                     (ss_a == 10'h44) ? m2ct_address :
+                     (ss_a == 10'h45) ? bg_scroll_x :
+                     (ss_a == 10'h46) ? bg_scroll_y :
+                     (ss_a == 10'h47) ? irq_line_count :
+                     (ss_a == 10'h48) ? {1'b0, spr_address} :
+                     (ss_a == 10'h49) ? {5'b0, spr_high_bits} :
+                     (ss_a == 10'h4A) ? {2'b0, xram_cpu_A[13:8]} :
+                     (ss_a == 10'h4B) ? xram_cpu_A[7:0] :
+                     (ss_a == 10'h4C) ? {xram_cpu_A_incr, xram_cpu_read, reset_flags, 5'b0} :
+                     (ss_a == 10'h4D) ? vram_cpu_D_outl :
+                     (ss_a == 10'h4E) ? cram_latch :
+                     (ss_a == 10'h4F) ? {7'b0, vbl_irq} :
+                     (ss_a == 10'h50) ? hbl_counter :
+                     (ss_a == 10'h51) ? {hbl_irq, 7'b0} :
+                     (ss_a == 10'h52) ? {irq_delay, IRQ_n, 4'b0} :
+                     (ss_a == 10'h53) ? {collide_flag, overflow_flag, line_overflow, 5'b0} :
+                     (ss_a == 10'h54) ? latched_x :
+                     (ss_a == 10'h55) ? {2'b0, xspr_collide_shift[13:8]} :
+                     (ss_a == 10'h56) ? xspr_collide_shift[7:0] :
+                     ss_cram_rd ? ss_cram_byte :
+                     ss_sub ? ss_main : 8'b0;
    
    // vram and cram lines for the cpu interface
    wire [14:0]   vram_cpu_A;
@@ -110,6 +152,8 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
    assign xmode_M1 = mode_M1 & mode_M2;
    assign xmode_M3 = mode_M3 & mode_M2;
    assign xmode_M4 = mode_M4;
+    assign ss_vram_q = vram_cpu_D_out;
+
    
    vdp_main #(.MAX_SPPL(MAX_SPPL)) vdp_main_inst(
       .clk_sys(clk_sys), .ce_vdp(ce_vdp), .ce_pix(ce_pix),
@@ -124,23 +168,39 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
       .bg_scroll_y(bg_scroll_y), .disable_hscroll(disable_hscroll), .disable_vscroll(disable_vscroll),
       .spr_address(spr_address), .spr_high_bits(spr_high_bits), .spr_shift(spr_shift),
       .spr_tall(spr_tall), .spr_wide(spr_wide), .spr_collide(spr_collide),
-      .spr_overflow(spr_overflow)
-   );
+      .spr_overflow(spr_overflow),
+       .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_main)
+    );
    
    // TODO: dpram
-   dpram #(.widthad_a(15)) vdp_vram_inst(
-      .clock_a(clk_sys), .address_a(vram_cpu_A), .wren_a(vram_cpu_WE),
-      .data_a(D_in), .q_a(vram_cpu_D_out), 
+    // Engine bulk port (ss_active: frozen, CPU idle) onto low 16 KB
+    dpram #(.widthad_a(15)) vdp_vram_inst(
+       .clock_a(clk_sys), .address_a(ss_active ? {1'b0, ss_vram_a} : vram_cpu_A), .wren_a(ss_active ? ss_vram_we : vram_cpu_WE),
+       .data_a(ss_active ? ss_vram_d : D_in), .q_a(vram_cpu_D_out), 
       
       .clock_b(clk_sys), .address_b({se_bank, vram_vdp_A}), .wren_b(1'b0), 
       .data_b(1'b0), .q_b(vram_vdp_D)
    );
-   
-   vdp_cram vdp_cram_inst(
-      .cpu_clk(clk_sys), .cpu_we(cram_cpu_WE), .cpu_a(cram_vdp_A_in),
-      .cpu_d(cram_vdp_D_in), .vdp_clk(clk_sys), .vdp_a(cram_vdp_A),
-      .vdp_d(cram_vdp_D)
-   );
+    // CRAM: engine scans/restores through the CPU port while frozen.
+    // Restore is a lo/hi byte pair per entry (0xC0+2i, 0xC1+2i).
+    wire [11:0] cram_ss_rq;
+    wire ss_cram_win = ss_we && (ss_a >= 10'hC0) && (ss_a <= 10'hFF);
+    wire ss_cram_hi = ss_a[0];
+    wire [4:0] ss_cram_idx = ss_a[5:1];
+    reg [7:0] cram_ss_lo;
+    always @(posedge clk_sys)
+       if (ss_we && (ss_a >= 10'hC0) && (ss_a <= 10'hFF) && !ss_a[0])
+          cram_ss_lo <= ss_din;
+    wire [4:0] cram_cpu_A = ss_cram_win ? ss_cram_idx : cram_vdp_A_in;
+    wire [11:0] cram_cpu_D = (ss_cram_win && ss_cram_hi) ? {ss_din[3:0], cram_ss_lo} : cram_vdp_D_in;
+    wire cram_cpu_W = (ss_cram_win && ss_cram_hi) ? 1'b1 : cram_cpu_WE;
+    vdp_cram vdp_cram_inst(
+       .cpu_clk(clk_sys), .cpu_we(cram_cpu_W), .cpu_a(cram_cpu_A),
+       .cpu_d(cram_cpu_D), .vdp_clk(clk_sys), .vdp_a(cram_vdp_A),
+       .vdp_d(cram_vdp_D),
+       .cpu_ra(ss_cram_idx), .cpu_rq(cram_ss_rq)
+    );
+
    
    assign cram_vdp_A_in = (gg == 1'b0) ? xram_cpu_A[4:0] : xram_cpu_A[5:1];
    assign cram_vdp_D_in = (gg == 1'b0) ? ({D_in[5:4], D_in[5:4], D_in[3:2], D_in[3:2], D_in[1:0], D_in[1:0]}) : 
@@ -183,7 +243,28 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
          mode_M4 <= 1'b1;
       
       end else  begin
-         data_write <= 1'b0;
+         if (ss_we && ((ss_a >= 10'h40 && ss_a <= 10'h4E) || ss_a == 10'h54)) begin
+            case (ss_a)
+                10'h40: { display_on, disable_hscroll, disable_vscroll, mask_column0, irq_frame_en, irq_line_en, spr_shift, spr_tall } <= ss_din;
+                10'h41: { spr_wide, mode_M4, mode_M3, mode_M2, mode_M1, to_cram, address_ff, data_write } <= ss_din;
+                10'h42: { overscan, bg_address } <= ss_din;
+                10'h43: m2mg_address <= ss_din[2:0];
+                10'h44: m2ct_address <= ss_din;
+                10'h45: bg_scroll_x <= ss_din;
+                10'h46: bg_scroll_y <= ss_din;
+                10'h47: irq_line_count <= ss_din;
+                10'h48: spr_address <= ss_din[6:0];
+                10'h49: spr_high_bits <= ss_din[2:0];
+                10'h4A: xram_cpu_A[13:8] <= ss_din[5:0];
+                10'h4B: xram_cpu_A[7:0] <= ss_din;
+                10'h4C: { xram_cpu_A_incr, xram_cpu_read, reset_flags } <= ss_din[7:5];
+                10'h4D: vram_cpu_D_outl <= ss_din;
+                10'h4E: cram_latch <= ss_din;
+                10'h54: latched_x <= ss_din;
+                default: ;
+            endcase
+         end else begin
+            data_write <= 1'b0;
          reset_set = 1'b0;
          
          old_HL <= HL;
@@ -295,13 +376,16 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
                xram_cpu_A_incr <= 1'b1;
             if ((~reset_set))
                reset_flags <= 1'b0;
+            end
          end 
       end 
    end
+
    
    
    always @(posedge clk_sys) begin
-      if (ce_vdp) begin
+      if (ss_we && ss_a == 10'h4F) vbl_irq <= ss_din[0];
+         else if (ce_vdp) begin
          //				485 instead of 487 to please VDPTEST 
          if (x == 485 & ((y == 224 & xmode_M1) | (y == 240 & xmode_M3) | (y == 192 & xmode_M1 == 1'b0 & xmode_M3 == 1'b0)) & (~(last_x0 == (x[0]))))
             vbl_irq <= 1'b1;
@@ -311,9 +395,12 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
    end 
    
    always @(posedge clk_sys) begin
-      if (ce_vdp) begin
+      if (ss_we && (ss_a == 10'h50 || ss_a == 10'h51)) begin
+         if (ss_a == 10'h50) hbl_counter <= ss_din;
+         else hbl_irq <= ss_din[0];
+      end else if (ce_vdp) begin
          last_x0 <= (x[0]);
-         if (x == 486 & (~(last_x0 == (x[0])))) begin
+         if ((x == 486) & (~(last_x0 == (x[0])))) begin
             if (y < 192 | (y < 240 & xmode_M3) | (y < 224 & xmode_M1) | y == 511) begin
                if (hbl_counter == 0) begin
                   hbl_irq <= hbl_irq | irq_line_en;		// <=> if irq_line_en then hbl_irq<=1
@@ -338,9 +425,18 @@ module vdp(clk_sys, ce_vdp, ce_pix, ce_sp, gg, ggres, se_bank, sp64, HL, RD_n, W
             end 
          end else
             line_overflow <= 1'b0;
-      end 
+      end
+ 
       
-      if (ce_vdp) begin
+      if (ss_we && ((ss_a >= 10'h52 && ss_a <= 10'h53) || (ss_a >= 10'h55 && ss_a <= 10'h56))) begin
+            case (ss_a)
+                10'h52: { irq_delay, IRQ_n } <= { ss_din[7:5], ss_din[4] };
+                10'h53: { collide_flag, overflow_flag, line_overflow } <= ss_din[7:5];
+                10'h55: xspr_collide_shift[13:8] <= ss_din[5:0];
+                10'h56: xspr_collide_shift[7:0] <= ss_din;
+                default: ;
+            endcase
+         end else if (ce_vdp) begin
          xspr_collide_shift[13:1] <= xspr_collide_shift[12:0];
          if (x <= 256)
             xspr_collide_shift[0] <= spr_collide;

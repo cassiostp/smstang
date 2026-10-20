@@ -1,5 +1,19 @@
 
-module vpd_sprite_shifter(clk_sys, ce_pix, x, spr_x, load, x248, x224, m4, wide_n, spr_d0, spr_d1, spr_d2, spr_d3, color, active);
+module vpd_sprite_shifter(clk_sys, ce_pix, x, spr_x, load, x248, x224, m4, wide_n, spr_d0, spr_d1, spr_d2, spr_d3, color, active, ss_a, ss_din, ss_we, ss_dout);
+   // Save-state bytes (per-instance base SS_BASE, frozen only):
+   // +0..+3 shift0..3, +4 {7'b0, wideclock}
+   parameter [9:0] SS_BASE = 10'hA0;
+   input [9:0] ss_a;
+   input [7:0] ss_din;
+   input ss_we;
+   output [7:0] ss_dout;
+   wire ss_sel = (ss_a >= SS_BASE) && (ss_a < SS_BASE + 10'd5);
+   assign ss_dout = !ss_sel ? 8'b0 :
+                    (ss_a == SS_BASE + 10'd0) ? shift0 :
+                    (ss_a == SS_BASE + 10'd1) ? shift1 :
+                    (ss_a == SS_BASE + 10'd2) ? shift2 :
+                    (ss_a == SS_BASE + 10'd3) ? shift3 :
+                    {7'b0, wideclock};
    input        clk_sys;
    input        ce_pix;
    input [7:0]  x;
@@ -21,9 +35,19 @@ module vpd_sprite_shifter(clk_sys, ce_pix, x, spr_x, load, x248, x224, m4, wide_
    reg [7:0]    shift1;
    reg [7:0]    shift2;
    reg [7:0]    shift3;
+
    
    always @(posedge clk_sys) begin
-      if (ce_pix) begin
+      if (ss_we && (ss_a >= SS_BASE) && (ss_a < SS_BASE + 10'd5)) begin
+         case (ss_a)
+            SS_BASE + 10'd0: shift0 <= ss_din;
+            SS_BASE + 10'd1: shift1 <= ss_din;
+            SS_BASE + 10'd2: shift2 <= ss_din;
+            SS_BASE + 10'd3: shift3 <= ss_din;
+            SS_BASE + 10'd4: wideclock <= ss_din[0];
+            default: ;
+         endcase
+      end else if (ce_pix) begin
          if (  (spr_x == x & (load & (m4 | spr_d3[7] == 1'b0) | x224 & spr_d3[7])) 
              | (spr_x == x + 8 & x248)) begin
             shift0 <= spr_d0;

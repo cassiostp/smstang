@@ -1,5 +1,5 @@
 
-module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme, bios_en, GG_EN, GG_CODE, GG_RESET, GG_AVAIL, RESET_n, rom_rd, rom_a, rom_do, j1_up, j1_down, j1_left, j1_right, j1_tl, j1_tr, j1_th, j1_start, j1_coin, j1_a3, j2_up, j2_down, j2_left, j2_right, j2_tl, j2_tr, j2_th, j2_start, j2_coin, j2_a3, pause, E0Type, E1Use, E2Use, E0, F2, F3, has_paddle, has_pedal, paddle, paddle2, pedal, j1_tr_out, j1_th_out, j2_tr_out, j2_th_out, x, y, color, palettemode, mask_column, black_column, smode_M1, smode_M2, smode_M3, ysj_quirk, pal, region, mapper_lock, vdp_enables, psg_enables, audioL, audioR, fm_ena, dbr, sp64, ram_a, ram_d, ram_we, ram_q, nvram_a, nvram_d, nvram_we, nvram_q, encrypt, key_a, key_d, ROMCL, ROMAD, ROMDT, ROMEN);
+module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme, bios_en, GG_EN, GG_CODE, GG_RESET, GG_AVAIL, RESET_n, rom_rd, rom_a, rom_do, j1_up, j1_down, j1_left, j1_right, j1_tl, j1_tr, j1_th, j1_start, j1_coin, j1_a3, j2_up, j2_down, j2_left, j2_right, j2_tl, j2_tr, j2_th, j2_start, j2_coin, j2_a3, pause, E0Type, E1Use, E2Use, E0, F2, F3, has_paddle, has_pedal, paddle, paddle2, pedal, j1_tr_out, j1_th_out, j2_tr_out, j2_th_out, x, y, color, palettemode, mask_column, black_column, smode_M1, smode_M2, smode_M3, ysj_quirk, pal, region, mapper_lock, vdp_enables, psg_enables, audioL, audioR, fm_ena, dbr, sp64, ram_a, ram_d, ram_we, ram_q, nvram_a, nvram_d, nvram_we, nvram_q, encrypt, key_a, key_d, ROMCL, ROMAD, ROMDT, ROMEN, ss_a, ss_din, ss_we, ss_dout, ss_point, ss_supported, VBlank, ss_active_sys, ss_vram_a, ss_vram_we, ss_vram_d, ss_vram_q, ss_snd_rst);
    parameter          MAX_SPPL = 7;
    parameter [32*8:1] BASE_DIR = "";
    input              clk_sys;
@@ -109,6 +109,37 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
    input [24:0]       ROMAD;
    input [7:0]        ROMDT;
    input              ROMEN;
+    // Save-state interface (smstang savestates, frozen only).
+    // CPU 0x00-0x1F, mapper/system 0x20-0x2F, PSG 0x100-0x114 (in psg_inst),
+    // VDP 0x40-0x56/0x60-0xBF/0xC0-0xFF (in vdp_inst).
+    input [9:0] ss_a;
+    input [7:0] ss_din;
+    input ss_we;
+    output [7:0] ss_dout;
+    output ss_point;
+    output ss_supported;
+    input VBlank;
+    wire [211:0] ss_reg;
+    reg [211:0] ss_dir = 0;
+    reg ss_dir_we = 0;
+    reg [24:0] ss_seq = 0;
+    reg ss_cpu_seq_we = 0;
+    wire [17:0] ss_misc;
+    wire [1:0] ss_iset;
+    wire ss_nmi_s, ss_nmicycle, ss_intcycle;
+    wire [2:0] ss_mc, ss_ts;
+    reg fm_touched = 0;
+    wire [7:0] ss_psg_dout, ss_vdp_dout;
+    // Engine bulk port into vdp_inst VRAM (low 16 KB) + freeze mux
+    input ss_active_sys;
+    input ss_snd_rst;
+    input [13:0] ss_vram_a;
+    input ss_vram_we;
+    input [7:0] ss_vram_d;
+    output [7:0] ss_vram_q;
+    // (ss_cpu_dout/ss_map_dout are regs in their readback blocks below)
+    wire [7:0] ss_io_dout;
+    wire [7:0] ss_mix_dout;
    
    
    wire               RD_n;
@@ -218,6 +249,94 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
    wire               GENIE;
    wire [7:0]         GENIE_DO;
    wire [7:0]         GENIE_DI;
+    // Save-state CPU restore: byte writes into shadow images; every write
+    // re-pulses the matching T80 strobe (idempotent once all bytes land).
+    always @(posedge clk_sys) begin
+       ss_dir_we <= 1'b0;
+       ss_cpu_seq_we <= 1'b0;
+       if (ss_we && ss_a <= 10'h1A) begin
+          ss_dir_we <= 1'b1;
+          case (ss_a)
+              10'h00: ss_dir[7:0] <= ss_din;
+              10'h01: ss_dir[15:8] <= ss_din;
+              10'h02: ss_dir[23:16] <= ss_din;
+              10'h03: ss_dir[31:24] <= ss_din;
+              10'h04: ss_dir[39:32] <= ss_din;
+              10'h05: ss_dir[47:40] <= ss_din;
+              10'h06: ss_dir[55:48] <= ss_din;
+              10'h07: ss_dir[63:56] <= ss_din;
+              10'h08: ss_dir[71:64] <= ss_din;
+              10'h09: ss_dir[79:72] <= ss_din;
+              10'h0A: ss_dir[87:80] <= ss_din;
+              10'h0B: ss_dir[95:88] <= ss_din;
+              10'h0C: ss_dir[103:96] <= ss_din;
+              10'h0D: ss_dir[111:104] <= ss_din;
+              10'h0E: ss_dir[119:112] <= ss_din;
+              10'h0F: ss_dir[127:120] <= ss_din;
+              10'h10: ss_dir[135:128] <= ss_din;
+              10'h11: ss_dir[143:136] <= ss_din;
+              10'h12: ss_dir[151:144] <= ss_din;
+              10'h13: ss_dir[159:152] <= ss_din;
+              10'h14: ss_dir[167:160] <= ss_din;
+              10'h15: ss_dir[175:168] <= ss_din;
+              10'h16: ss_dir[183:176] <= ss_din;
+              10'h17: ss_dir[191:184] <= ss_din;
+              10'h18: ss_dir[199:192] <= ss_din;
+              10'h19: ss_dir[207:200] <= ss_din;
+              10'h1A: ss_dir[211:208] <= ss_din[3:0];
+              default: ;
+          endcase
+       end else if (ss_we && ss_a >= 10'h1B && ss_a <= 10'h1E) begin
+          ss_cpu_seq_we <= 1'b1;
+          case (ss_a)
+              10'h1B: ss_seq[7:0] <= ss_din;
+              10'h1C: ss_seq[15:8] <= ss_din;
+              10'h1D: ss_seq[24:19] <= ss_din[7:2];
+              10'h1E: ss_seq[18:16] <= ss_din[2:0];
+              default: ;
+          endcase
+       end
+    end
+
+    // CPU readback from the live T80 (combinational)
+    reg [7:0] ss_cpu_dout;
+    always @* begin
+       case (ss_a)
+           10'h00: ss_cpu_dout = ss_reg[7:0];
+           10'h01: ss_cpu_dout = ss_reg[15:8];
+           10'h02: ss_cpu_dout = ss_reg[23:16];
+           10'h03: ss_cpu_dout = ss_reg[31:24];
+           10'h04: ss_cpu_dout = ss_reg[39:32];
+           10'h05: ss_cpu_dout = ss_reg[47:40];
+           10'h06: ss_cpu_dout = ss_reg[55:48];
+           10'h07: ss_cpu_dout = ss_reg[63:56];
+           10'h08: ss_cpu_dout = ss_reg[71:64];
+           10'h09: ss_cpu_dout = ss_reg[79:72];
+           10'h0A: ss_cpu_dout = ss_reg[87:80];
+           10'h0B: ss_cpu_dout = ss_reg[95:88];
+           10'h0C: ss_cpu_dout = ss_reg[103:96];
+           10'h0D: ss_cpu_dout = ss_reg[111:104];
+           10'h0E: ss_cpu_dout = ss_reg[119:112];
+           10'h0F: ss_cpu_dout = ss_reg[127:120];
+           10'h10: ss_cpu_dout = ss_reg[135:128];
+           10'h11: ss_cpu_dout = ss_reg[143:136];
+           10'h12: ss_cpu_dout = ss_reg[151:144];
+           10'h13: ss_cpu_dout = ss_reg[159:152];
+           10'h14: ss_cpu_dout = ss_reg[167:160];
+           10'h15: ss_cpu_dout = ss_reg[175:168];
+           10'h16: ss_cpu_dout = ss_reg[183:176];
+           10'h17: ss_cpu_dout = ss_reg[191:184];
+           10'h18: ss_cpu_dout = ss_reg[199:192];
+           10'h19: ss_cpu_dout = ss_reg[207:200];
+           10'h1A: ss_cpu_dout = {4'b0, ss_reg[211:208]};
+           10'h1B: ss_cpu_dout = ss_misc[7:0];
+           10'h1C: ss_cpu_dout = ss_misc[15:8];
+           10'h1D: ss_cpu_dout = {ss_mc, ss_ts, 2'b0};
+           10'h1E: ss_cpu_dout = {5'b0, M1_n, ss_misc[17:16]};
+           default: ss_cpu_dout = 8'b0;
+       endcase
+    end
+
    
    // Game Genie
    CODES #(.ADDR_WIDTH(16), .DATA_WIDTH(8)) GAMEGENIE(
@@ -248,7 +367,12 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .DI(GENIE_DI), 
       .DO(D_in),
       .WAIT_n(1'b1),
-      .BUSRQ_n(1'b1) );
+      .BUSRQ_n(1'b1),
+       .SS_Set(ss_cpu_seq_we), .SS_In(ss_seq),
+       .SS_Misc(ss_misc), .SS_ISet(ss_iset),
+       .SS_NMI_s(ss_nmi_s), .SS_NMICycle(ss_nmicycle),
+       .SS_IntCycle(ss_intcycle), .SS_MC(ss_mc), .SS_TS(ss_ts),
+       .DIRSet(ss_dir_we), .DIR(ss_dir), .REG(ss_reg) );
    
    vdp #(MAX_SPPL) vdp_inst(
       .clk_sys(clk_sys), 
@@ -278,7 +402,10 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .ysj_quirk(ysj_quirk), 
       .mask_column(mask_column), 
       .black_column(black_column), 
-      .reset_n(RESET_n));
+      .reset_n(RESET_n),
+      .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_vdp_dout),
+      .ss_active(ss_active_sys), .ss_vram_a(ss_vram_a), .ss_vram_we(ss_vram_we),
+      .ss_vram_d(ss_vram_d), .ss_vram_q(ss_vram_q));
    
    vdp #(MAX_SPPL) vdp2_inst(
       .clk_sys(clk_sys),
@@ -305,7 +432,10 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .y1(vdp2_y1),
       .ysj_quirk(ysj_quirk),
       .black_column(black_column),
-      .reset_n(RESET_n)
+      .reset_n(RESET_n),
+      .ss_a(10'b0), .ss_din(8'b0), .ss_we(1'b0), .ss_dout(),
+      .ss_active(1'b0), .ss_vram_a(14'b0), .ss_vram_we(1'b0),
+      .ss_vram_d(8'b0), .ss_vram_q()
    );
    
    jt89 psg_inst(
@@ -316,7 +446,10 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .mux(PSG_mux),
       .soundL(PSG_outL),
       .soundR(PSG_outR),
-      .rst((~RESET_n))
+      .rst((~RESET_n)),
+      .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_psg_dout)
+   ,
+      .ss_snd_rst(ss_snd_rst)
    );
    
    jt89 psg2_inst(
@@ -327,7 +460,10 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .mux(PSG_mux),
       .soundL(PSG2_outL),
       .soundR(PSG2_outR),
-      .rst((~RESET_n))
+      .rst((~RESET_n)),
+      .ss_a(10'b0), .ss_din(8'b0), .ss_we(1'b0), .ss_dout()
+   ,
+      .ss_snd_rst(1'b0)
    );
 
    opll fm(
@@ -337,7 +473,7 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .a(fm_a),
       .cs_n(1'b0),
       .we_n(1'b0),
-      .ic_n(RESET_n),
+      .ic_n(RESET_n & ~ss_snd_rst),
       .mixout(FM_out)
    );
 
@@ -345,6 +481,9 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       if (RESET_n == 1'b0) begin
          fm_d <= {8{1'b0}};
          fm_a <= 1'b0;
+      end else if (ss_we && (ss_a == 10'h2B || ss_a == 10'h2C)) begin
+         if (ss_a == 10'h2B) fm_a <= ss_din[0];
+         else fm_d <= ss_din;
       end else if (fm_WR_n == 1'b0) begin
          fm_d <= D_in;
          fm_a <= A[0];
@@ -353,6 +492,16 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
    
    // AMR - Clamped volume boosting - if the top two bits match, truncate the topmost bit.
    // If the top two bits don't match, duplicate the second bit across the output.
+    // FM use detector: any FM-register write refuses save states in v1
+    // (the OPLL state is not snapshotted). Reset-cleared, so a load of a
+    // clean state re-arms support until the game touches FM again.
+    always @(posedge clk_sys) begin
+       if (RESET_n == 1'b0)
+          fm_touched <= 1'b0;
+       else if (fm_WR_n == 1'b0)
+          fm_touched <= 1'b1;
+    end
+
    
    assign FM_gated = (fm_ena == 1'b0 | det_D[0] == 1'b0) ? {13{1'b0}} : 		// All zero if FM is disabled
                      (`FM_sign == `FM_adj) ? FM_out[13 - 1:0] : 		// Pass through
@@ -378,7 +527,9 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .audio_in_r2(signed'({mix2_inR, 3'b000})),
       .audio_l(audioL),
       .audio_r(audioR)
-   );
+   ,
+       .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_mix_dout)
+    );
    
    //	audioL <= (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00") + (FM_out(13) & FM_out & "0") when fm_ena = '1'
    //	     else (PSG_outL(10) & PSG_outL(10) & PSG_outL(10) & PSG_outL & "00");
@@ -399,7 +550,9 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       .F2(F2), .F3(F3), .has_paddle(has_paddle), .has_pedal(has_pedal),
       .paddle(paddle), .paddle2(paddle2), .pedal(pedal), .pal(pal),
       .gg(gg), .systeme(systeme), .region(region), .RESET_n(RESET_n)
-   );
+   ,
+       .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_io_dout)
+    );
    
    assign ce_z80 = (systeme | turbo) ? ce_pix : ce_cpu;
    
@@ -453,6 +606,7 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
    always @(posedge clk_sys) begin
       if (RESET_n == 1'b0)
          bootloader_n <= ~bios_en;
+      else if (ss_we && ss_a == 10'h2D) bootloader_n <= ss_din[0];
       else if (ctl_WR_n == 1'b0 & bootloader_n == 1'b0)
          bootloader_n <= 1'b1;
    end 
@@ -466,6 +620,9 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
       if (RESET_n == 1'b0) begin
          det_D <= 3'b111;
          PSG_mux <= 8'hFF;
+      end else if (ss_we && (ss_a == 10'h29 || ss_a == 10'h2A)) begin
+         if (ss_a == 10'h29) det_D <= ss_din[2:0];
+         else PSG_mux <= ss_din;
       end else if (det_WR_n == 1'b0)
          det_D <= D_in[2:0];
       else if (bal_WR_n == 1'b0)
@@ -508,6 +665,11 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
          mapper_msx_lock0 <= 1'b0;
          mapper_msx_lock <= 1'b0;
          mapper_msx <= 1'b0;
+      end else if (ss_we && (ss_a == 10'h25 || ss_a == 10'h26)) begin
+         if (ss_a == 10'h25)
+            { mapper_codies_lock, mapper_codies, lock_mapper_B, mapper_msx_lock, mapper_msx } <= ss_din[4:0];
+         else
+            { mapper_msx_check1, mapper_msx_check0 } <= ss_din[1:0];
       end else begin
          if (bootloader_n & (~mapper_msx_lock)) begin
             if (MREQ_n == 1'b0) begin
@@ -543,6 +705,19 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
          lock_mapper_B <= 1'b0;
          mapper_codies <= 1'b0;
          mapper_codies_lock <= 1'b0;
+      end else if (ss_we && ss_a >= 10'h20 && ss_a <= 10'h28) begin
+         case (ss_a)
+             10'h20: bank0 <= ss_din;
+             10'h21: bank1 <= ss_din;
+             10'h22: bank2 <= ss_din;
+             10'h23: bank3 <= ss_din;
+             10'h24: { nvram_cme, nvram_p, nvram_ex, nvram_e } <= ss_din[3:0];
+             10'h25: { mapper_codies_lock, mapper_codies, lock_mapper_B, mapper_msx_lock, mapper_msx } <= ss_din[4:0];
+             10'h26: { mapper_msx_check1, mapper_msx_check0 } <= ss_din[1:0];
+             10'h27: last_read_addr[7:0] <= ss_din;
+             10'h28: last_read_addr[15:8] <= ss_din;
+             default: ;
+         endcase
       end else begin
          if (WR_n & MREQ_n == 1'b0)
             last_read_addr <= A;		// gyurco anti-ldir patch
@@ -618,11 +793,49 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
                      ;
                endcase
          end
-      end 
-   
-   assign rom_a[12:0] = A[12:0];
-   
-   always @*
+      end    // Save-state readback mux + capture point + support flag
+    wire ss_cpu_win = (ss_a <= 10'h1F);
+    wire ss_map_win = (ss_a >= 10'h20) && (ss_a <= 10'h2F);
+    wire ss_io_win = (ss_a >= 10'h30) && (ss_a <= 10'h36);
+    wire ss_psg_win = (ss_a >= 10'h100) && (ss_a <= 10'h114);
+    assign ss_dout = ss_cpu_win ? ss_cpu_dout :
+                     ss_map_win ? ss_map_dout :
+                     ss_io_win ? ss_io_dout :
+                     ss_psg_win ? ss_psg_dout :
+                     ss_vdp_dout;
+    // Capture at M1-fetch T2 with a clean microcode state, no
+    // pending/acknowledged interrupt, no IRQ owed, in vblank.
+    assign ss_point = VBlank && !M1_n && !MREQ_n &&
+                      (ss_mc == 3'b001) && (ss_ts == 3'd2) &&
+                      (ss_iset == 2'b00) && !ss_intcycle &&
+                      !ss_nmicycle && !ss_nmi_s && IRQ_n;
+    // v1 scope: SMS/GG only (systeme is hard 0 in this build), FM untouched
+    assign ss_supported = !systeme && !fm_touched;
+
+
+    // Mapper/system readback (combinational)
+    reg [7:0] ss_map_dout;
+    always @* begin
+       case (ss_a)
+           10'h20: ss_map_dout = bank0;
+           10'h21: ss_map_dout = bank1;
+           10'h22: ss_map_dout = bank2;
+           10'h23: ss_map_dout = bank3;
+           10'h24: ss_map_dout = {4'b0, nvram_cme, nvram_p, nvram_ex, nvram_e};
+           10'h25: ss_map_dout = {3'b0, mapper_codies_lock, mapper_codies, lock_mapper_B, mapper_msx_lock, mapper_msx};
+           10'h26: ss_map_dout = {6'b0, mapper_msx_check1, mapper_msx_check0};
+           10'h27: ss_map_dout = last_read_addr[7:0];
+           10'h28: ss_map_dout = last_read_addr[15:8];
+           10'h29: ss_map_dout = {5'b0, det_D};
+           10'h2A: ss_map_dout = PSG_mux;
+           10'h2B: ss_map_dout = {7'b0, fm_a};
+           10'h2C: ss_map_dout = fm_d;
+           10'h2D: ss_map_dout = {7'b0, bootloader_n};
+           default: ss_map_dout = 8'b0;
+       endcase
+    end   
+   always @* begin
+      rom_a[12:0] = A[12:0];
       if (systeme)
          case (A[15:14])
             2'b10 :
@@ -660,6 +873,7 @@ module system(clk_sys, ce_cpu, ce_vdp, ce_pix, ce_sp, turbo, gg, ggres, systeme,
                rom_a[21:14] = bank2;
          endcase
       end
+   end
    
 endmodule
 

@@ -16,10 +16,10 @@
     Author: Jose Tejada Gomez. Twitter: @topapate
     Version: 1.0
     Date: March, 8th 2017
-    
+
     This work was originally based in the implementation found on the
     SMS core of MiST. Some of the changes, all according to data sheet:
-    
+
         -Fixed volume
         -Fixed tone 2 rate option of noise generator
         -Fixed rate of noise generator
@@ -27,7 +27,13 @@
         -Fixed noise generator update bug by which it gets updated
             multiple times if v='0'
         -Added all 0's prevention circuit to noise generator
-    
+
+    Save states (smstang): byte readback/restore of every register and
+    phase counter over ss_a/ss_din/ss_we (frozen only). The window base is
+    SS_BASE; offsets: +0/+1 tone0, +2/+3 tone1, +4/+5 tone2, +6/+7 vol,
+    +8 {regn,ctrl3}, +9 {clk_div,cen_16}, +10 {clr_noise,last_wr},
+    +11/+12 tone0 cnt, +13/+14 tone1 cnt, +15/+16 tone2 cnt,
+    +17/+18 noise shift, +19/+20 noise cnt.
     */
 
 module jt89(
@@ -39,12 +45,29 @@ module jt89(
     input    [7:0] mux,
     output  signed [10:0] soundL,
     output  signed [10:0] soundR,
-    output         ready
+    output         ready,
+    // Save-state byte bus (global addresses, frozen only)
+    input    [9:0] ss_a,
+    input    [7:0] ss_din,
+    input          ss_we,
+    output   [7:0] ss_dout
+,
+    input          ss_snd_rst // audio resync (see savestate_sms)
 );
+
+parameter [9:0] SS_BASE = 10'h100;
 
 wire signed [ 8:0] ch0, ch1, ch2, noise;
 
 assign ready = 1'b1;
+
+// Save-state selects (reads and writes share the decode)
+wire ss_tone_regs = (ss_a >= SS_BASE) && (ss_a < SS_BASE + 10'd11);
+wire ss_tone0_sel = (ss_a == SS_BASE + 10'd11) || (ss_a == SS_BASE + 10'd12);
+wire ss_tone1_sel = (ss_a == SS_BASE + 10'd13) || (ss_a == SS_BASE + 10'd14);
+wire ss_tone2_sel = (ss_a == SS_BASE + 10'd15) || (ss_a == SS_BASE + 10'd16);
+wire ss_noise_sel = (ss_a >= SS_BASE + 10'd17) && (ss_a < SS_BASE + 10'd21);
+wire [7:0] ss_tone0, ss_tone1, ss_tone2, ss_noise;
 
 jt89_mixer mix(
     .clk    ( clk   ),
@@ -58,6 +81,8 @@ jt89_mixer mix(
 	 .mux    ( mux   ),
     .soundL ( soundL ),
     .soundR ( soundR )
+,
+    .ss_snd_rst ( ss_snd_rst )
 );
 
 // configuration registers
@@ -72,24 +97,44 @@ reg [3:0] clk_div;
 always @(negedge clk )
     if( rst ) begin
         cen_16 <= 1'b1;
+    end else if( ss_we && ss_a == SS_BASE + 10'd9 ) begin
+        cen_16 <= ss_din[4];
     end else begin
         cen_16 <= clk_en & (&clk_div);
     end
 
 always @(posedge clk )
-    if( rst ) 
+    if( rst )
         clk_div <= 4'd0;
+    else if( ss_we && ss_a == SS_BASE + 10'd9 )
+        clk_div <= ss_din[7:4];
     else if( clk_en )
         clk_div <= clk_div + 1'b1;
 
 reg clr_noise, last_wr;
 wire [2:0] reg_sel = din[7] ? din[6:4] : regn;
 
-always @(posedge clk) 
+always @(posedge clk)
     if( rst ) begin
         { vol0, vol1, vol2, vol3 } <= {16{1'b1}};
         { tone0, tone1, tone2 } <= 30'd0;
         ctrl3 <= 3'b100;
+    end
+    else if( ss_we && ss_tone_regs ) begin
+        case( ss_a )
+            SS_BASE + 10'd0: tone0[7:0] <= ss_din;
+            SS_BASE + 10'd1: tone0[9:8] <= ss_din[1:0];
+            SS_BASE + 10'd2: tone1[7:0] <= ss_din;
+            SS_BASE + 10'd3: tone1[9:8] <= ss_din[1:0];
+            SS_BASE + 10'd4: tone2[7:0] <= ss_din;
+            SS_BASE + 10'd5: tone2[9:8] <= ss_din[1:0];
+            SS_BASE + 10'd6: { vol1, vol0 } <= ss_din;
+            SS_BASE + 10'd7: { vol3, vol2 } <= ss_din;
+            SS_BASE + 10'd8: { regn, ctrl3 } <= { ss_din[7:5], ss_din[4:2] };
+            SS_BASE + 10'd9: ;   // clk_div/cen_16 handled above
+            SS_BASE + 10'd10: { clr_noise, last_wr } <= ss_din[7:6];
+            default: ;
+        endcase
     end
     else begin
         last_wr <= wr_n;
@@ -111,6 +156,31 @@ always @(posedge clk)
         else clr_noise <= 1'b0;
     end
 
+// Save-state readback of the configuration registers (combinational)
+reg [7:0] ss_regs_dout;
+always @* begin
+    case( ss_a )
+        SS_BASE + 10'd0: ss_regs_dout = tone0[7:0];
+        SS_BASE + 10'd1: ss_regs_dout = {6'b0, tone0[9:8]};
+        SS_BASE + 10'd2: ss_regs_dout = tone1[7:0];
+        SS_BASE + 10'd3: ss_regs_dout = {6'b0, tone1[9:8]};
+        SS_BASE + 10'd4: ss_regs_dout = tone2[7:0];
+        SS_BASE + 10'd5: ss_regs_dout = {6'b0, tone2[9:8]};
+        SS_BASE + 10'd6: ss_regs_dout = { vol1, vol0 };
+        SS_BASE + 10'd7: ss_regs_dout = { vol3, vol2 };
+        SS_BASE + 10'd8: ss_regs_dout = { regn, ctrl3, 2'b0 };
+        SS_BASE + 10'd9: ss_regs_dout = { clk_div, cen_16, 3'b0 };
+        SS_BASE + 10'd10: ss_regs_dout = { clr_noise, last_wr, 6'b0 };
+        default: ss_regs_dout = 8'b0;
+    endcase
+end
+
+assign ss_dout = ss_tone_regs ? ss_regs_dout :
+                 ss_tone0_sel ? ss_tone0 :
+                 ss_tone1_sel ? ss_tone1 :
+                 ss_tone2_sel ? ss_tone2 :
+                 ss_noise_sel ? ss_noise : 8'b0;
+
 jt89_tone u_tone0(
     .clk    ( clk       ),
     .rst    ( rst       ),
@@ -118,17 +188,31 @@ jt89_tone u_tone0(
     .vol    ( vol0      ),
     .tone   ( tone0     ),
     .snd    ( ch0       ),
-    .out    (           )
+    .out    (           ),
+    .ss_sel ( ss_tone0_sel ),
+    .ss_idx ( ss_a[0]   ),
+    .ss_din ( ss_din    ),
+    .ss_we  ( ss_we     ),
+    .ss_dout( ss_tone0  )
+,
+    .ss_snd_rst ( ss_snd_rst )
 );
 
 jt89_tone u_tone1(
     .clk    ( clk       ),
-    .rst    ( rst       ),  
+    .rst    ( rst       ),
     .clk_en ( cen_16    ),
     .vol    ( vol1      ),
     .tone   ( tone1     ),
     .snd    ( ch1       ),
-    .out    (           )
+    .out    (           ),
+    .ss_sel ( ss_tone1_sel ),
+    .ss_idx ( ss_a[0]   ),
+    .ss_din ( ss_din    ),
+    .ss_we  ( ss_we     ),
+    .ss_dout( ss_tone1  )
+,
+    .ss_snd_rst ( ss_snd_rst )
 );
 
 wire out2;
@@ -140,7 +224,14 @@ jt89_tone u_tone2(
     .vol    ( vol2      ),
     .tone   ( tone2     ),
     .snd    ( ch2       ),
-    .out    ( out2      )
+    .out    ( out2      ),
+    .ss_sel ( ss_tone2_sel ),
+    .ss_idx ( ss_a[0]   ),
+    .ss_din ( ss_din    ),
+    .ss_we  ( ss_we     ),
+    .ss_dout( ss_tone2  )
+,
+    .ss_snd_rst ( ss_snd_rst )
 );
 
 jt89_noise u_noise(
@@ -151,7 +242,14 @@ jt89_noise u_noise(
     .vol    ( vol3      ),
     .ctrl3  ( ctrl3     ),
     .tone2  ( tone2     ),
-    .snd    ( noise     )
+    .snd    ( noise     ),
+    .ss_sel ( ss_noise_sel ),
+    .ss_idx ( ss_a[1:0] ),
+    .ss_din ( ss_din    ),
+    .ss_we  ( ss_we     ),
+    .ss_dout( ss_noise  )
+,
+    .ss_snd_rst ( ss_snd_rst )
 );
 
 endmodule

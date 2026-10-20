@@ -85,6 +85,18 @@ module T80s(
    output [15:0] A,
    input [7:0]   DI,
    output [7:0]  DO
+   , input         SS_Set
+   , input [24:0]  SS_In
+   , output [17:0] SS_Misc
+   , output [1:0]  SS_ISet
+   , output        SS_NMI_s
+   , output        SS_NMICycle
+   , output        SS_IntCycle
+   , output [2:0]  SS_MC
+   , output [2:0]  SS_TS
+   , input         DIRSet
+   , input [211:0]   DIR
+   , output [211:0]  REG
 );
 
    parameter     Mode = 0;		// 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
@@ -105,8 +117,14 @@ module T80s(
       .INT_n(INT_n), .NMI_n(NMI_n), .RESET_n(RESET_n), .BUSRQ_n(BUSRQ_n), 
       .BUSAK_n(BUSAK_n), .CLK_n(CLK), .A(A), .DInst(DI), 
       .DI(DI_Reg), .DO(DO), .MC(MCycle), .TS(TState), .out0(OUT0), 
-      .IntCycle_n(IntCycle_n)
+      .IntCycle_n(IntCycle_n),
+      .SS_Set(SS_Set), .SS_In(SS_In),
+      .SS_ISet(SS_ISet), .SS_NMI_s(SS_NMI_s), .SS_NMICycle(SS_NMICycle),
+      .SS_IntCycle(SS_IntCycle), .SS_Misc(SS_Misc),
+      .DIRSet(DIRSet), .DIR(DIR), .REG(REG)
    );
+    assign SS_MC = MCycle;
+    assign SS_TS = TState;
       
    always @(posedge CLK)
       if (RESET_n == 1'b0) begin

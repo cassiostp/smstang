@@ -20,7 +20,29 @@ module vdp_background(
    
    output reg [4:0]  color,
    output reg        PRIORITY
-);   
+   , input [9:0] ss_a
+   , input [7:0] ss_din
+   , input ss_we
+   , output [7:0] ss_dout
+);
+    // Save-state bytes 0x60-0x6F (frozen only): x, tile_index,
+    // {tile_y,palette,priority_latch,flip_x}, datac, data0-3,
+    // shift0-3, {palette_reg,PRIORITY}
+    assign ss_dout = (ss_a == 10'h60) ? x :
+                     (ss_a == 10'h61) ? tile_index[7:0] :
+                     (ss_a == 10'h62) ? {7'b0, tile_index[8]} :
+                     (ss_a == 10'h63) ? {tile_y, palette, priority_latch, flip_x, 2'b0} :
+                     (ss_a == 10'h64) ? datac :
+                     (ss_a == 10'h65) ? data0 :
+                     (ss_a == 10'h66) ? data1 :
+                     (ss_a == 10'h67) ? data2 :
+                     (ss_a == 10'h68) ? data3 :
+                     (ss_a == 10'h69) ? shift0 :
+                     (ss_a == 10'h6A) ? shift1 :
+                     (ss_a == 10'h6B) ? shift2 :
+                     (ss_a == 10'h6C) ? shift3 :
+                     (ss_a == 10'h6D) ? {palette_reg, PRIORITY, 6'b0} :
+                     8'b0;   
    
    reg [8:0]     tile_index;
    reg [7:0]     x;
@@ -39,10 +61,12 @@ module vdp_background(
    reg [7:0]     shift1;
    reg [7:0]     shift2;
    reg [7:0]     shift3;
+
    
    
    always @(posedge clk_sys)  begin
-      if (ce_pix) begin
+      if (ss_we && ss_a == 10'h60) x <= ss_din;
+      else if (ce_pix) begin
          if (reset) begin
             if (smode_M4 == 1'b0)
                x <= 8'b11110000;		// 240
@@ -66,8 +90,7 @@ module vdp_background(
    always @(posedge clk_sys) begin
       reg [12:0]    char_address;
       reg [11:0]    data_address;
-
-      if (ce_pix) begin
+          if (ce_pix) begin
          if (smode_M4) begin
             if (smode_M1 | smode_M3)
                char_address[12:5] = {table_address[13:12], (6'b011100 + y[7:3])};
@@ -105,9 +128,22 @@ module vdp_background(
    
    
    always @(posedge clk_sys) begin
+
       integer       i;
 
-      if (ce_pix) begin
+      if (ss_we && ss_a >= 10'h61 && ss_a <= 10'h68) begin
+             case (ss_a)
+                 10'h61: tile_index[7:0] <= ss_din;
+                 10'h62: tile_index[8] <= ss_din[0];
+                 10'h63: { tile_y, palette, priority_latch, flip_x } <= { ss_din[7:5], ss_din[4], ss_din[3], ss_din[2] };
+                 10'h64: datac <= ss_din;
+                 10'h65: data0 <= ss_din;
+                 10'h66: data1 <= ss_din;
+                 10'h67: data2 <= ss_din;
+                 10'h68: data3 <= ss_din;
+                 default: ;
+             endcase
+          end else if (ce_pix) begin
          if (smode_M4)
             case (x[2:0])
                3'b001 :
@@ -155,10 +191,20 @@ module vdp_background(
             endcase
       end 
    end
+
    
    reg palette_reg;
    always @(posedge clk_sys) begin
-      if (ce_pix)
+      if (ss_we && ss_a >= 10'h69 && ss_a <= 10'h6D) begin
+             case (ss_a)
+                 10'h69: shift0 <= ss_din;
+                 10'h6A: shift1 <= ss_din;
+                 10'h6B: shift2 <= ss_din;
+                 10'h6C: shift3 <= ss_din;
+                 10'h6D: { palette_reg, PRIORITY } <= ss_din[7:6];
+                 default: ;
+             endcase
+          end else if (ce_pix)
          case (x[2:0])
             3'b111 : begin
                if (flip_x == 1'b0) begin

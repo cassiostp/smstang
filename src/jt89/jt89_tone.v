@@ -29,7 +29,16 @@ module jt89_tone(
     input         [9:0] tone,
     input         [3:0] vol,
     output        [8:0] snd,
-    output reg          out
+    output reg          out,
+    // Save-state byte access (frozen only): ss_idx 0 = cnt[7:0],
+    // 1 = {4'b0, out, cnt[9:8]}
+    input               ss_sel,
+    input               ss_idx,
+    input         [7:0] ss_din,
+    input               ss_we,
+    output        [7:0] ss_dout
+,
+    input               ss_snd_rst
 );
 
 reg [9:0] cnt;
@@ -37,6 +46,7 @@ reg last_out;
 
 jt89_vol u_vol(
     .rst    ( rst     ),
+    .ss_snd_rst ( ss_snd_rst ),
     .clk    ( clk     ),
     .clk_en ( clk_en  ),
     .din    ( out     ),
@@ -44,10 +54,18 @@ jt89_vol u_vol(
     .snd    ( snd     )
 );
 
-always @(posedge clk) 
+assign ss_dout = ss_idx ? {4'b0, out, cnt[9:8]} : cnt[7:0];
+
+always @(posedge clk)
     if( rst ) begin
         cnt <= 10'd0;
         out <= 1'b0;
+    end else if( ss_we && ss_sel ) begin
+        if( ss_idx ) begin
+            cnt[9:8] <= ss_din[1:0];
+            out <= ss_din[2];
+        end else
+            cnt[7:0] <= ss_din;
     end else if( clk_en ) begin
         if( tone < 6 )    // special case. This is used for sample playing.
             out <= 1'b1;

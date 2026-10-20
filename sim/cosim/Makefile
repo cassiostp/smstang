@@ -83,6 +83,7 @@ $(GEN)/uart_fixed_sim.v: $(RTL)/iosys/uart_fixed.v
 	! grep -q "ASSERTION_ERROR PARAMETER_OUT_OF_RANGE(" $@
 
 COSIM_SRCS := /coresim-src/sim/cosim/cosim_top.sv \
+	/coresim-src/src/savestate_sms.v \
 	/coresim-build/gen/iosys_bl616_cosim.v \
 	/coresim-build/gen/uart_fixed_sim.v \
 	/coresim-src/src/iosys/textdisp.v \
@@ -123,6 +124,7 @@ lint: $(GEN)/iosys_bl616_cosim.v $(GEN)/dpram_sim.v $(GEN)/uart_fixed_sim.v
 	$(IVERILOG) iverilog -g2012 -DCOSIM -o /dev/null -s cosim_top \
 	    $(COSIM_VARIANT_INC) \
 	    /coresim-src/sim/cosim/cosim_top.sv \
+	    /coresim-src/src/savestate_sms.v \
 	    /coresim-build/gen/iosys_bl616_cosim.v /coresim-build/gen/uart_fixed_sim.v \
 	    /coresim-src/src/iosys/textdisp.v /coresim-src/sim/cosim/gowin/gowin_dpb_menu.v \
 	    /coresim-build/gen/dpram_sim.v

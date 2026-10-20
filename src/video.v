@@ -1,5 +1,11 @@
 
-module video(clk, ce_pix, pal, border, ggres, mask_column, cut_mask, smode_M1, smode_M3, x, y, hsync, vsync, hblank, vblank);
+module video(clk, ce_pix, pal, border, ggres, mask_column, cut_mask, smode_M1, smode_M3, x, y, hsync, vsync, hblank, vblank, ss_a, ss_din, ss_we, ss_dout);
+    // Save-state byte bus (global addresses, frozen only):
+    // 0x38/0x39 hcount, 0x3A/0x3B vcount, 0x3C {hsync,vsync,hblank,vblank}
+    input [9:0] ss_a;
+    input [7:0] ss_din;
+    input ss_we;
+    output [7:0] ss_dout;
    input        clk;
    input        ce_pix;
    input        pal;
@@ -24,10 +30,26 @@ module video(clk, ce_pix, pal, border, ggres, mask_column, cut_mask, smode_M1, s
    wire [8:0]   vbl_end;
    wire [8:0]   hbl_st;
    wire [8:0]   hbl_end;
+    // Save-state readback (combinational)
+    assign ss_dout = (ss_a == 10'h38) ? hcount[7:0] :
+                     (ss_a == 10'h39) ? {7'b0, hcount[8]} :
+                     (ss_a == 10'h3A) ? vcount[7:0] :
+                     (ss_a == 10'h3B) ? {7'b0, vcount[8]} :
+                     (ss_a == 10'h3C) ? {hsync, vsync, hblank, vblank, 4'b0} :
+                     8'b0;
    
    always @(posedge clk) begin
-      if (ce_pix) begin
-         if (hcount == 487) begin
+               if (ss_we) begin
+          case (ss_a)
+              10'h38: hcount[7:0] <= ss_din;
+              10'h39: hcount[8] <= ss_din[0];
+              10'h3A: vcount[7:0] <= ss_din;
+              10'h3B: vcount[8] <= ss_din[0];
+              10'h3C: { hsync, vsync } <= ss_din[7:6];
+              default: ;
+          endcase
+       end else if (ce_pix) begin
+          if (hcount == 487) begin
             vcount <= vcount + 1;
             if (pal) begin
                // VCounter: 0-258, 458-511 = 313 steps
@@ -121,7 +143,9 @@ module video(clk, ce_pix, pal, border, ggres, mask_column, cut_mask, smode_M1, s
                     048;
    
    always @(posedge clk) begin
-      if (ce_pix) begin
+      if (ss_we && ss_a == 10'h3C) begin
+         { hblank, vblank } <= ss_din[5:4];
+      end else if (ce_pix) begin
          if (hcount == hbl_end)
             hblank <= 1'b0;
          else if (hcount == hbl_st)

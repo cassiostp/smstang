@@ -1,5 +1,12 @@
 
-module vdp_main(clk_sys, ce_vdp, ce_pix, ce_sp, ggres, sp64, vram_A, vram_D, cram_A, cram_D, x, y, color, palettemode, y1, display_on, mask_column0, black_column, smode_M1, smode_M3, smode_M4, ysj_quirk, overscan, bg_address, m2mg_address, m2ct_address, bg_scroll_x, bg_scroll_y, disable_hscroll, disable_vscroll, spr_address, spr_high_bits, spr_shift, spr_tall, spr_wide, spr_collide, spr_overflow);
+module vdp_main(clk_sys, ce_vdp, ce_pix, ce_sp, ggres, sp64, vram_A, vram_D, cram_A, cram_D, x, y, color, palettemode, y1, display_on, mask_column0, black_column, smode_M1, smode_M3, smode_M4, ysj_quirk, overscan, bg_address, m2mg_address, m2ct_address, bg_scroll_x, bg_scroll_y, disable_hscroll, disable_vscroll, spr_address, spr_high_bits, spr_shift, spr_tall, spr_wide, spr_collide, spr_overflow, ss_a, ss_din, ss_we, ss_dout);
+    // Save-state byte bus: 0x60-0x6F background, 0x70+ sprites/shifters
+    input [9:0] ss_a;
+    input [7:0] ss_din;
+    input ss_we;
+    output [7:0] ss_dout;
+    wire [7:0] ss_bg, ss_spr;
+    assign ss_dout = ss_bg | ss_spr;
    parameter     MAX_SPPL = 7;
 
    input         clk_sys;
@@ -82,7 +89,9 @@ module vdp_main(clk_sys, ce_vdp, ce_pix, ce_sp, ggres, sp64, vram_A, vram_D, cra
       .y(bg_y),                    .screen_y(y),              .vram_A(bg_vram_A),        .vram_D(vram_D),
       .color(bg_color),            .smode_M1(smode_M1),       .smode_M3(smode_M3),       .smode_M4(smode_M4),
       .ysj_quirk(ysj_quirk),       .PRIORITY(bg_priority)
-   );
+   ,
+       .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_bg)
+    );
    
    vdp_sprites #(MAX_SPPL) vdp_spr_inst(
       .clk_sys(clk_sys),          .ce_vdp(ce_vdp),           .ce_pix(ce_pix),           .ce_sp(ce_sp),
@@ -90,7 +99,9 @@ module vdp_main(clk_sys, ce_vdp, ce_pix, ce_sp, ggres, sp64, vram_A, vram_D, cra
       .wide(spr_wide),            .shift(spr_shift),          .x(x),                     .y(y),
       .collide(spr_collide),      .overflow(spr_overflow),    .smode_M1(smode_M1),       .smode_M3(smode_M3),
       .smode_M4(smode_M4),        .vram_A(spr_vram_A),        .vram_D(vram_D),           .color(spr_color)
-   );
+   ,
+       .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_spr)
+    );
    
    always @* begin
       reg           spr_active;

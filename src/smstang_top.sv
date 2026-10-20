@@ -238,16 +238,52 @@ wire frame_halt_raw = 1'b0;         // no sms2hdmi under Verilator: no frame loc
 // PAL frames (313 lines) are longer than the HDMI frame, so the halt-lock
 // cannot hold them: run PAL free as before.
 wire frame_halt = frame_halt_raw & ~pal;
-wire ce_cpu_g = ce_cpu & ~pause_menu & ~frame_halt;
-wire ce_vdp_g = ce_vdp & ~pause_menu & ~frame_halt;
-wire ce_pix_g = ce_pix & ~pause_menu & ~frame_halt;
-wire ce_sp_g  = ce_sp  & ~pause_menu & ~frame_halt;
+wire ce_cpu_g = ce_cpu & ~pause_menu & ~frame_halt & ~ss_freeze;
+wire ce_vdp_g = ce_vdp & ~pause_menu & ~frame_halt & ~ss_freeze;
+wire ce_pix_g = ce_pix & ~pause_menu & ~frame_halt & ~ss_freeze;
+wire ce_sp_g  = ce_sp  & ~pause_menu & ~frame_halt & ~ss_freeze;
+// Save-state engine (src/savestate_sms.v): streams VRAM/WRAM/NVRAM +
+// registers while ss_freeze holds the ce grid, like pause_menu.
+wire ss_freeze, ss_reset, ss_loaded, ss_active;
+wire ss_snd_rst;
+wire [9:0] ss_a;
+wire [7:0] ss_din;
+wire ss_we;
+wire [7:0] ss_dout_sys, ss_dout_vid, ss_dout;
+wire ss_point, ss_supported;
+wire [16:0] ss_mem_addr;
+wire [7:0] ss_mem_din, ss_mem_q;
+wire ss_mem_we, ss_mem_req, ss_mem_ack;
+wire [1:0] ss_mem_sel = ss_mem_addr[16:15];
+wire [14:0] ss_mem_ad = ss_mem_addr[14:0];
+wire [13:0] ss_vram_a = ss_mem_ad[13:0];
+wire ss_vram_we = ss_active && (ss_mem_sel == 2'd0) && ss_mem_we;
+wire [7:0] ss_vram_d = ss_mem_din;
+wire [7:0] ss_vram_q;
+assign ss_dout = ss_dout_sys | ss_dout_vid;
+assign ss_mem_q = (ss_mem_sel == 2'd0) ? ss_vram_q :
+                  (ss_mem_sel == 2'd1) ? ram_q : nvram_q;
+// Bulk-RAM read latency cover: ack is req delayed 3 clocks (toggle parity
+// preserved); the engine samples mem_q ~24 clocks after the request.
+reg [2:0] ss_ack_s = 0;
+always @(posedge clk_sys) ss_ack_s <= {ss_ack_s[1:0], ss_mem_req};
+assign ss_mem_ack = ss_ack_s[2];
+// Canonical ce-grid phase for the engine's settle (clkd free-runs).
+wire ss_ce_phase = (clkd == 5'd0);
+// Header flags v1: bit 0 = Game Gear mode (cross-mode loads refuse).
+wire [63:0] ss_flags = {63'b0, gg};
+`ifdef HZ120
+localparam [7:0] SS_VARIANT = 8'd1;
+`else
+localparam [7:0] SS_VARIANT = 8'd0;
+`endif
+
 system #(63) system
 (
 	.clk_sys(clk_sys), .ce_cpu(ce_cpu_g), .ce_vdp(ce_vdp_g),
 	.ce_pix(ce_pix_g), .ce_sp(ce_sp_g), .turbo(turbo),
 	.gg(gg), .ggres(ggres), .systeme(systeme),
-	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~reset),
+	.bios_en(/*~status[11] & ~systeme*/1'b0), .RESET_n(~(reset | ss_reset)),
 
 	.GG_RESET(/*ioctl_download && ioctl_wr && !ioctl_addr*/), .GG_EN(status[24]), .GG_CODE(/*gg_code*/),
 	.GG_AVAIL(/*gg_avail*/),
@@ -290,6 +326,11 @@ system #(63) system
 
 	.nvram_a(nvram_a), .nvram_we(nvram_we), .nvram_d(nvram_d),
 	.nvram_q(nvram_q),
+ 	.ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_dout_sys),
+ 	.ss_point(ss_point), .ss_supported(ss_supported), .VBlank(VBlank),
+ 	.ss_active_sys(ss_active), .ss_vram_a(ss_vram_a), .ss_vram_we(ss_vram_we),
+ 	.ss_vram_d(ss_vram_d), .ss_vram_q(ss_vram_q),
+ 	.ss_snd_rst(ss_snd_rst),
 
 	.encrypt(SYSMODE[0][1:0]), .key_a(/*(key_a)*/), .key_d(/*(key_d)*/),
 
@@ -315,7 +356,34 @@ video video
 	.vsync(VS),
 	.hblank(HBlank),
 	.vblank(VBlank)
+,
+ 	.ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_dout_vid)
 );
+////////////////// Save states //////////////////
+// Full-machine snapshots over the UART block channel (see savestate_sms.v
+// and iosys_bl616 SS_IF): registers + VRAM/WRAM/NVRAM while frozen.
+wire [2:0] ss_op;
+wire ss_op_stb;
+wire [127:0] ss_status;
+wire [19:0] ss_img_raddr, ss_img_waddr;
+wire ss_img_rd_stb, ss_img_taken, ss_img_abort, ss_img_rdy, ss_img_wr_stb;
+wire [7:0] ss_img_q, ss_img_wdin;
+savestate_sms #(.VARIANT(SS_VARIANT)) ss_engine (
+    .clk(clk_sys), .ce_phase(ss_ce_phase), .resetn(locked),
+    .ss_flags(ss_flags), .ss_supported(ss_supported), .ss_point(ss_point),
+    .ss_freeze(ss_freeze), .ss_reset(ss_reset), .ss_loaded(ss_loaded),
+    .ss_edge_reset(), .ss_active(ss_active), .ss_snd_rst(ss_snd_rst), .ss_snd_rst(ss_snd_rst),
+    .ss_a(ss_a), .ss_din(ss_din), .ss_we(ss_we), .ss_dout(ss_dout),
+    .mem_addr(ss_mem_addr), .mem_din(ss_mem_din), .mem_we(ss_mem_we),
+    .mem_req(ss_mem_req), .mem_ack(ss_mem_ack), .mem_q(ss_mem_q),
+    .op(ss_op), .op_stb(ss_op_stb), .ss_status(ss_status),
+    .img_raddr(ss_img_raddr), .img_rd_stb(ss_img_rd_stb),
+    .img_taken(ss_img_taken), .img_abort(ss_img_abort),
+    .img_rdy(ss_img_rdy), .img_q(ss_img_q),
+    .img_waddr(ss_img_waddr), .img_wdin(ss_img_wdin), .img_wr_stb(ss_img_wr_stb)
+);
+
+
 
 ////////////////// Memories //////////////////
 
@@ -362,9 +430,10 @@ sdram ram (
 spram #(.widthad_a(14)) ram_inst
 (
 	.clock     (clk_sys),
-	.address   (systeme ? ram_a : {1'b0,ram_a[12:0]}),
-	.wren      (ram_we),
-	.data      (ram_d),
+	// Engine bulk port (ss_active: frozen, game idle) onto low 8 KB
+	.address   (ss_active ? ((ss_mem_sel == 2'd1) ? {1'b0, ss_mem_ad[12:0]} : 14'b0) : (systeme ? ram_a : {1'b0,ram_a[12:0]})),
+	.wren      (ss_active ? ((ss_mem_sel == 2'd1) & ss_mem_we) : ram_we),
+	.data      (ss_active ? ss_mem_din : ram_d),
 	.q         (ram_q)
 );
 
@@ -373,9 +442,9 @@ spram #(.widthad_a(14)) ram_inst
 dpram #(.widthad_a(15)) nvram_inst
 (
 	.clock_a     (clk_sys),
-	.address_a   (nvram_a),
-	.wren_a      (nvram_we),
-	.data_a      (nvram_d),
+	.address_a   (ss_active ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : nvram_a),
+	.wren_a      (ss_active ? ((ss_mem_sel == 2'd2) & ss_mem_we) : nvram_we),
+	.data_a      (ss_active ? ss_mem_din : nvram_d),
 	.q_a         (nvram_q),
 	.clock_b     (clk_sys),
 	.address_b   (sv_addr),
@@ -396,7 +465,7 @@ wire [14:0] overlay_color;
 sms2hdmi sms2hdmi_inst (
 	.clk(clk_sys), .resetn(~reset),
 	.clk_pixel(clk_pixel),.clk_5x_pixel(clk_5x_pixel),
-    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l(pause_menu ? 16'd0 : audio_l), .audio_r(pause_menu ? 16'd0 : audio_r),
+    .ce_pix(ce_pix), .x(x), .y(y), .color(color), .audio_l((pause_menu | ss_freeze) ? 16'd0 : audio_l), .audio_r((pause_menu | ss_freeze) ? 16'd0 : audio_r),
     .frame_halt(frame_halt_raw), .std_timing(video_std_timing),
 `ifdef HZ120
     .bfi_mode(video_config[21:20]),
@@ -447,7 +516,7 @@ usb_hid_host usb_hid_host2 (
 assign led = ~{joy1[4:0], usb_type, usb_conerr};
 
 iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(SYS_FREQ), .CORE_ID(5),
-              .SAVE_IF(1), .SAVE_AW(15) )     // deep blue smstang logo, 32 KB battery saves
+              .SAVE_IF(1), .SAVE_AW(15), .SS_IF(1) )     // deep blue smstang logo, 32 KB battery saves
     sys_inst (
     .clk(clk_sys), .hclk(clk_pixel), .resetn(1'b1),
 
@@ -456,7 +525,12 @@ iosys_bl616 #(.COLOR_LOGO(15'b11111_00000_00000), .FREQ(SYS_FREQ), .CORE_ID(5),
     .joy1(joy1_btns | joy1_usb), .joy2(joy2_btns | joy2_usb),
     .hid1(joy1_mcu), .hid2(joy2_mcu),
     .sv_addr(sv_addr), .sv_din(sv_din), .sv_we(sv_we),
-    .sv_q(sv_q), .sv_core_we(nvram_we),
+    .sv_q(sv_q), .sv_core_we(nvram_we | ss_loaded),
+    .ss_op(ss_op), .ss_op_stb(ss_op_stb), .ss_status(ss_status),
+    .ss_img_raddr(ss_img_raddr), .ss_img_rd_stb(ss_img_rd_stb),
+    .ss_img_taken(ss_img_taken), .ss_img_abort(ss_img_abort),
+    .ss_img_rdy(ss_img_rdy), .ss_img_q(ss_img_q),
+    .ss_img_waddr(ss_img_waddr), .ss_img_wdin(ss_img_wdin), .ss_img_wr_stb(ss_img_wr_stb),
     .uart_tx(UART_TXD), .uart_rx(UART_RXD),
 
     .rom_loading(rom_loading), .rom_do(rom_do), .rom_do_valid(rom_do_valid)

@@ -53,6 +53,17 @@
 //   The save channel shares the RAM with the game with zero delay, so a dump
 //   runs at pure UART speed (~16 ms for 64 blocks at 2 Mbaud).
 //
+// SAVE STATES (savestate_sms engine under test here): the REAL engine streams
+// a fixed 115-block image (header + 1 KB pattern regs + 16 KB VRAM + 8 KB
+// WRAM + 32 KB NVRAM) while ss_freeze holds the scripted "game" (churn/poke
+// stop, exactly as the ce grid stops on hardware). VRAM/WRAM are behavioral
+// arrays, pattern-filled on programming; NVRAM is the same real dpram the
+// battery path uses (port A shared with the game, engine-muxed while
+// active). ss_loaded re-dirties the battery save, like smstang_top. This
+// proves the firmware<->engine link behavior (save -> power-cycle -> load ->
+// byte-identical re-save, corrupt/wrong-game refuses); true machine-state
+// determinism is proven in sim/savestate on the real machine.
+//
 // OBSERVABILITY (all real unless noted)
 //   core_config/video_config/overlay: straight out of iosys (expect-config-bit reads the
 //   real register). rom_bytes: ROM payload bytes consumed (firmware streams
@@ -117,12 +128,14 @@ always @(posedge clk) begin
 end
 
 assign tx_pending = (sys.send_state != 4'd0) || (sys.response_req != sys.response_ack) ||
-                    (sys.sv_rd_req != sys.sv_rd_ack) || sys.sv_notify;
+                    (sys.sv_rd_req != sys.sv_rd_ack) || sys.sv_notify ||
+                    (sys.ss_rd_req != sys.ss_rd_ack) || (sys.ss_st_req != sys.ss_st_ack);
 
 iosys_bl616_cosim #(
     .FREQ(21_492_000),
     .SAVE_IF(1),
-    .SAVE_AW(15)
+    .SAVE_AW(15),
+    .SS_IF(1)
 ) sys (
     .clk(clk),
     .hclk(hclk),
@@ -147,6 +160,12 @@ iosys_bl616_cosim #(
     .sv_we(sv_we),
     .sv_q(sv_q),
     .sv_core_we(game_we),
+    .ss_op(ss_op), .ss_op_stb(ss_op_stb), .ss_status(ss_status),
+    .ss_img_raddr(ss_img_raddr), .ss_img_rd_stb(ss_img_rd_stb),
+    .ss_img_taken(ss_img_taken), .ss_img_abort(ss_img_abort),
+    .ss_img_rdy(ss_img_rdy), .ss_img_q(ss_img_q),
+    .ss_img_waddr(ss_img_waddr), .ss_img_wdin(ss_img_wdin),
+    .ss_img_wr_stb(ss_img_wr_stb),
     .core_config(core_config),
     .video_config(video_config),
     .uart_rx(uart_rx_iosys),
@@ -159,13 +178,90 @@ reg [14:0] addrA = 0;
 reg weA = 0;
 reg [7:0] dinA = 0;
 wire [7:0] game_q;
+wire game_we = weA | ss_loaded;    // sv_core_we, exactly as smstang_top
+
+// ---- Save-state engine (real src/savestate_sms.v) over pattern state ----
+// Bulk sections: VRAM/WRAM behavioral arrays (pattern-filled on
+// programming, overwritten by loads); NVRAM goes through the real dpram
+// port A, engine-muxed below. ss_flags = SMS mode, supported, and the
+// capture point is immediate (no CPU here); ce_phase is trivially 1.
+wire [9:0] ss_a;
+wire [7:0] ss_din_engine, ss_dout_regs;
+wire ss_we_engine;
+wire ss_freeze, ss_reset_unused, ss_loaded, ss_active;
+wire [16:0] ss_mem_addr;
+wire [7:0] ss_mem_din, ss_mem_q;
+wire ss_mem_we, ss_mem_req;
+wire [1:0] ss_op;
+wire ss_op_stb;
+wire [127:0] ss_status;
+wire [19:0] ss_img_raddr, ss_img_waddr;
+wire ss_img_rd_stb, ss_img_taken, ss_img_abort, ss_img_rdy, ss_img_wr_stb;
+wire [7:0] ss_img_q, ss_img_wdin;
+wire [1:0] ss_mem_sel = ss_mem_addr[16:15];
+wire [14:0] ss_mem_ad = ss_mem_addr[14:0];
+
+reg [7:0] ss_regs[1024];
+reg [7:0] ss_vram[16384];
+reg [7:0] ss_wram[8192];
+integer ss_i;
+always @(posedge clk) begin
+    if (!resetn) begin
+        for (ss_i = 0; ss_i < 1024; ss_i = ss_i + 1)
+            ss_regs[ss_i] <= (ss_i * 31 + 7) % 256;
+        for (ss_i = 0; ss_i < 16384; ss_i = ss_i + 1)
+            ss_vram[ss_i] <= (ss_i * 17 + 3) % 256;
+        for (ss_i = 0; ss_i < 8192; ss_i = ss_i + 1)
+            ss_wram[ss_i] <= (ss_i * 13 + 11) % 256;
+    end else if (ss_we_engine) begin
+        ss_regs[ss_a] <= ss_din_engine;
+    end
+end
+assign ss_dout_regs = ss_regs[ss_a];
+// engine bulk writes into the arrays (single cycle, same clock)
+always @(posedge clk) begin
+    if (ss_active && ss_mem_we_p) begin
+        if (ss_mem_sel == 2'd0)
+            ss_vram[ss_mem_ad[13:0]] <= ss_mem_din;
+        else if (ss_mem_sel == 2'd1)
+            ss_wram[ss_mem_ad[12:0]] <= ss_mem_din;
+    end
+end
+assign ss_mem_q = (ss_mem_sel == 2'd0) ? ss_vram[ss_mem_ad[13:0]] :
+                  (ss_mem_sel == 2'd1) ? ss_wram[ss_mem_ad[12:0]] :
+                  game_q;
+// bulk-RAM latency cover: ack is req delayed 3 clocks
+reg ss_mem_we_p = 0;
+reg [2:0] ss_ack_s = 0;
+always @(posedge clk) begin
+    ss_mem_we_p <= ss_active && (ss_mem_sel != 2'd2) && ss_mem_we;
+    ss_ack_s <= {ss_ack_s[1:0], ss_mem_req};
+end
+wire ss_mem_ack = ss_ack_s[2];
+
+savestate_sms ss_engine (
+    .clk(clk), .ce_phase(1'b1), .resetn(resetn),
+    .ss_flags(64'b0), .ss_supported(1'b1), .ss_point(1'b1),
+    .ss_freeze(ss_freeze), .ss_reset(ss_reset_unused), .ss_loaded(ss_loaded),
+    .ss_edge_reset(), .ss_active(ss_active),
+    .ss_a(ss_a), .ss_din(ss_din_engine), .ss_we(ss_we_engine),
+    .ss_dout(ss_dout_regs),
+    .mem_addr(ss_mem_addr), .mem_din(ss_mem_din), .mem_we(ss_mem_we),
+    .mem_req(ss_mem_req), .mem_ack(ss_mem_ack), .mem_q(ss_mem_q),
+    .op(ss_op), .op_stb(ss_op_stb), .ss_status(ss_status),
+    .img_raddr(ss_img_raddr), .img_rd_stb(ss_img_rd_stb),
+    .img_taken(ss_img_taken), .img_abort(ss_img_abort),
+    .img_rdy(ss_img_rdy), .img_q(ss_img_q),
+    .img_waddr(ss_img_waddr), .img_wdin(ss_img_wdin), .img_wr_stb(ss_img_wr_stb)
+);
+wire [7:0] game_q;
 wire game_we = weA;                  // sv_core_we, exactly as smstang_top
 
 dpram #(.widthad_a(15)) nvram (
     .clock_a(clk),
-    .address_a(addrA),
-    .wren_a(weA),
-    .data_a(dinA),
+    .address_a(ss_active ? ((ss_mem_sel == 2'd2) ? ss_mem_ad : 15'b0) : addrA),
+    .wren_a(ss_active ? ((ss_mem_sel == 2'd2) & ss_mem_we) : weA),
+    .data_a(ss_active ? ss_mem_din : dinA),
     .q_a(game_q),
     .clock_b(clk),
     .address_b(sv_addr),
@@ -193,7 +289,7 @@ always @(posedge clk) begin
         tc <= 0;
         churn_addr <= 0;
         lfsr <= 16'hACE1;
-    end else begin
+    end else if (!ss_freeze) begin
         tc <= tc + 1;
         lfsr <= lfsr_next(lfsr);
 

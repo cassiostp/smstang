@@ -1,4 +1,5 @@
-module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu_bank, rom_bank, J1_tr_out, J1_th_out, J2_tr_out, J2_th_out, J1_up, J1_down, J1_left, J1_right, J1_tl, J1_tr, J1_th, J1_start, J1_coin, J1_a3, J2_up, J2_down, J2_left, J2_right, J2_tl, J2_tr, J2_th, J2_start, J2_coin, J2_a3, Pause, E0Type, E1Use, E2Use, E0, F2, F3, has_paddle, has_pedal, paddle, paddle2, pedal, pal, gg, systeme, region, RESET_n);
+module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu_bank, rom_bank, J1_tr_out, J1_th_out, J2_tr_out, J2_th_out, J1_up, J1_down, J1_left, J1_right, J1_tl, J1_tr, J1_th, J1_start, J1_coin, J1_a3, J2_up, J2_down, J2_left, J2_right, J2_tl, J2_tr, J2_th, J2_start, J2_coin, J2_a3, Pause, E0Type, E1Use, E2Use, E0, F2, F3, has_paddle, has_pedal, paddle, paddle2, pedal, pal, gg, systeme, region, RESET_n,
+    ss_a, ss_din, ss_we, ss_dout);
    input                clk;
    input                WR_n;
    input                RD_n;
@@ -51,6 +52,13 @@ module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu
    input                systeme;
    input                region;
    input                RESET_n;
+    // Save-state byte bus (global addresses, frozen only):
+    // 0x30 ctrl, 0x31 gg_ddr, 0x32 gg_txd, 0x33 gg_rxd, 0x34 gg_pdr,
+    // 0x35 {j2_th_dir,j1_th_dir}, 0x36 analog {select,player,upper}
+    input [9:0]          ss_a;
+    input [7:0]          ss_din;
+    input                ss_we;
+    output [7:0]         ss_dout;
    
    reg [7:0]    ctrl;
    reg [7:0]    gg_ddr;
@@ -64,6 +72,16 @@ module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu
    reg          analog_upper;
    // signal gg_sctrl:	std_logic_vector(7 downto 3) $ "00111";
    
+    // Save-state readback (combinational)
+    assign ss_dout = (ss_a == 10'h30) ? ctrl :
+                     (ss_a == 10'h31) ? gg_ddr :
+                     (ss_a == 10'h32) ? gg_txd :
+                     (ss_a == 10'h33) ? gg_rxd :
+                     (ss_a == 10'h34) ? gg_pdr :
+                     (ss_a == 10'h35) ? {6'b0, j2_th_dir, j1_th_dir} :
+                     (ss_a == 10'h36) ? {5'b0, analog_select, analog_player, analog_upper} :
+                     8'b0;
+
    always @(posedge clk or negedge RESET_n)
       if (RESET_n == 1'b0) begin
          ctrl <= 8'hFF;
@@ -74,7 +92,17 @@ module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu
          analog_select <= 1'b0;
          analog_player <= 1'b0;
       // gg_sctrl <= "00111" ;
-      end else begin
+       end else if (ss_we) begin
+          case (ss_a)
+              10'h30: ctrl <= ss_din;
+              10'h31: gg_ddr <= ss_din;
+              10'h32: gg_txd <= ss_din;
+              10'h33: gg_rxd <= ss_din;
+              10'h34: gg_pdr <= ss_din;
+              10'h36: { analog_select, analog_player, analog_upper } <= ss_din[2:0];
+              default: ;
+          endcase
+       end else begin
          if (gg & A[7:3] == 5'b00000) begin
             if (WR_n == 1'b0)
                case (A[2:0])
@@ -247,8 +275,13 @@ module io(clk, WR_n, RD_n, A, D_in, D_out, HL_out, vdp1_bank, vdp2_bank, vdp_cpu
       J2_tr_out <= ctrl[2] | ctrl[6] | region;
       J2_th_out <= ctrl[3] | ctrl[7] | region;
       HL_out <= ((~j1_th_dir) & ctrl[1]) | (ctrl[1] & (~J1_th)) | ((~j2_th_dir) & ctrl[3]) | (ctrl[3] & (~J2_th));
-      j1_th_dir <= ctrl[1];
-      j2_th_dir <= ctrl[3];
+      if (ss_we && ss_a == 10'h35) begin
+         j1_th_dir <= ss_din[0];
+         j2_th_dir <= ss_din[1];
+      end else begin
+         j1_th_dir <= ctrl[1];
+         j2_th_dir <= ctrl[3];
+      end
    end 
    
 endmodule

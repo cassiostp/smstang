@@ -20,7 +20,8 @@
     */
 
 module jt89_mixer #(parameter bw=9)(
-    input            rst,
+    input            rst,,
+    input            ss_snd_rst,
     input            clk,
     input            clk_en,
     input            cen_16,
@@ -42,7 +43,9 @@ always @(*)
         (mux[2] ? { {2{ch2[bw-1]}}, ch2     } : {bw+1{1'b0}})+
         (mux[3] ? { {2{noise[bw-1]}}, noise } : {bw+1{1'b0}});
 
-always @(posedge clk) soundR <= freshR;
+always @(posedge clk)
+    if (rst || ss_snd_rst) soundR <= 0;
+    else soundR <= freshR;
 
 always @(*)
     freshL = 
@@ -51,6 +54,8 @@ always @(*)
         (mux[6] ? { {2{ch2[bw-1]}}, ch2     } : {bw+1{1'b0}})+
         (mux[7] ? { {2{noise[bw-1]}}, noise } : {bw+1{1'b0}});
 
-always @(posedge clk) soundL <= freshL;
+always @(posedge clk)
+    if (rst || ss_snd_rst) soundL <= 0;
+    else soundL <= freshL;
 
 endmodule 

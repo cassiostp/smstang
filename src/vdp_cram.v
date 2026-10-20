@@ -1,6 +1,12 @@
 
 // CRAM: CPU writes and VDP reads
-module vdp_cram(cpu_clk, cpu_we, cpu_a, cpu_d, vdp_clk, vdp_a, vdp_d);
+module vdp_cram(cpu_clk, cpu_we, cpu_a, cpu_d, vdp_clk, vdp_a, vdp_d, cpu_ra, cpu_rq);
+   // Save-state scan port: combinational read of any entry (the VDP
+   // video port is in use while frozen, so the engine scans here). On
+   // GW5A this folds into flip-flops; the RAM is 32x12 and stays tiny.
+   input [4:0] cpu_ra;
+   output [11:0] cpu_rq;
+   assign cpu_rq = ram[cpu_ra];
    input         cpu_clk;
    input         cpu_we;
    input [4:0]   cpu_a;

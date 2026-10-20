@@ -104,8 +104,17 @@ module T80(
    
    input             DIRSet,
    input [211:0]     DIR 		// IFF2, IFF1, IM, IY, HL', DE', BC', IX, HL, DE, BC, PC, SP, R, I, F', A', F, A
+   , input             SS_Set // savestate sequencer restore strobe
+   , input [24:0]      SS_In // {MCycle, TState, M1_n, Halt_FF, Alternate, WZ}
+   , output [1:0]      SS_ISet // live ISet (capture point)
+   , output            SS_NMI_s // pending NMI (capture point)
+   , output            SS_NMICycle // NMI acknowledge cycle (capture point)
+   , output            SS_IntCycle // INT acknowledge cycle (capture point)
+   , output [17:0]     SS_Misc // {Halt_FF, Alternate, WZ} (snapshot)
 );
 
+   // Save-state sequencer snapshot (smstang savestates, see SS_* ports above):
+   // the microcode/bus state DIR does not cover. WZ/Alternate restore here.
    parameter       Mode = 0;		// 0 => Z80, 1 => Fast Z80, 2 => 8080, 3 => GB
    parameter       IOWait = 0;	// 0 => Single cycle I/O, 1 => Std I/O cycle
    parameter       Flag_C = 0;
@@ -252,6 +261,12 @@ module T80(
    assign REG = (Alternate == 1'b0) ? {IntE_FF2, IntE_FF1, IStatus, DOR, PC, SP, R, I, Fp, Ap, F, ACC} : 
                 {IntE_FF2, IntE_FF1, IStatus, DOR[127:112], DOR[47:0], DOR[63:48], DOR[111:64], 
                  PC, SP, R, I, Fp, Ap, F, ACC};
+
+   assign SS_ISet = ISet;
+   assign SS_NMI_s = NMI_s;
+   assign SS_NMICycle = NMICycle;
+   assign SS_IntCycle = IntCycle;
+   assign SS_Misc = {Halt_FF, Alternate, WZ};
    
    T80_MCode #(
       .Mode(Mode), .Flag_C(Flag_C), .Flag_N(Flag_N), .Flag_P(Flag_P), 
@@ -343,6 +358,10 @@ module T80(
             PC <= DIR[79:64];
             A  <= DIR[79:64];
             IStatus <= DIR[209:208];
+         
+          end else if (SS_Set) begin
+             Alternate <= SS_In[16];
+             WZ <= SS_In[15:0];
          
          end else if (ClkEn) begin
             ALU_Op_r <= 4'b0000;
@@ -951,6 +970,11 @@ module T80(
          if (DIRSet) begin
             IntE_FF2 <= DIR[211];
             IntE_FF1 <= DIR[210];
+          end else if (SS_Set) begin
+             MCycle <= SS_In[24:22];
+             TState <= SS_In[21:19];
+             M1_n <= SS_In[18];
+             Halt_FF <= SS_In[17];
          end else begin
             if (NMI_n == 1'b0 & OldNMI_n)
                NMI_s <= 1'b1;

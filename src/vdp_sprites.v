@@ -1,5 +1,32 @@
 
-module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_high_bits, tall, wide, shift, smode_M1, smode_M3, smode_M4, vram_A, vram_D, x, y, collide, overflow, color);
+module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_high_bits, tall, wide, shift, smode_M1, smode_M3, smode_M4, vram_A, vram_D, x, y, collide, overflow, color, ss_a, ss_din, ss_we, ss_dout);
+    // Save-state bytes (frozen only): 0x70 eval regs, 0x77-0x9E
+    // sprite buffers, 0x9F {collide,overflow,color}; shifters at
+    // 0xA0+5i (wired below)
+    input [9:0] ss_a;
+    input [7:0] ss_din;
+    input ss_we;
+    output [7:0] ss_dout;
+    integer ss_i;
+    wire [7:0] ss_shift[0:MAX_SPPL];
+    wire [7:0] ss_buf = (ss_a >= 10'h77 && ss_a < 10'h77 + MAX_SPPL + 1) ? spr_x[ss_a - 10'h77] :
+                       (ss_a >= 10'h7F && ss_a < 10'h7F + MAX_SPPL + 1) ? spr_d0[ss_a - 10'h7F] :
+                       (ss_a >= 10'h87 && ss_a < 10'h87 + MAX_SPPL + 1) ? spr_d1[ss_a - 10'h87] :
+                       (ss_a >= 10'h8F && ss_a < 10'h8F + MAX_SPPL + 1) ? spr_d2[ss_a - 10'h8F] :
+                       (ss_a >= 10'h97 && ss_a < 10'h97 + MAX_SPPL + 1) ? spr_d3[ss_a - 10'h97] : 8'b0;
+    wire ss_is_buf = (ss_a >= 10'h77) && (ss_a <= 10'h9E);
+    wire [7:0] ss_shift_mux = (ss_a >= 10'hA0) && (ss_a < 10'hA0 + 5 * (MAX_SPPL + 1)) ?
+                              ss_shift[(ss_a - 10'hA0) / 5] : 8'b0;
+    assign ss_dout = (ss_a == 10'h70) ? {5'b0, state} :
+                     (ss_a == 10'h71) ? count :
+                     (ss_a == 10'h72) ? {2'b0, index} :
+                     (ss_a == 10'h73) ? data_address[7:0] :
+                     (ss_a == 10'h74) ? {2'b0, data_address[13:8]} :
+                     (ss_a == 10'h75) ? m2_flags :
+                     (ss_a == 10'h76) ? {enable[7], enable[6], enable[5], enable[4], enable[3], enable[2], enable[1], enable[0]} :
+                     ss_is_buf ? ss_buf :
+                     (ss_a == 10'h9F) ? {collide, overflow, color, 2'b0} :
+                     ss_shift_mux;
    parameter         MAX_SPPL = 7;
    input             clk_sys;
    input             ce_vdp;
@@ -53,7 +80,7 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
          genvar i;
          for (i = 0; i <= MAX_SPPL; i = i + 1)
          begin : shifters
-            vpd_sprite_shifter shifter(
+            vpd_sprite_shifter #(.SS_BASE(10'hA0 + 5 * i)) shifter(
                .clk_sys(clk_sys),
                .ce_pix(ce_pix),
                .x(x[7:0]),
@@ -73,6 +100,11 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
                .spr_d3(spr_d3[i]),
                .color(spr_color[i]),
                .active(spr_active[i])
+            ,
+               .ss_a(ss_a),
+               .ss_din(ss_din),
+               .ss_we(ss_we),
+               .ss_dout(ss_shift[i])
             );		
          end
       end
@@ -100,19 +132,45 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
    end
 
    assign ce_spload = (MAX_SPPL < 8 | sp64 == 1'b0) ? ce_vdp : ce_sp;
+
    
    always @(posedge clk_sys) begin
       reg [8:0]         y9;
       reg [8:0]         d9;
       reg [8:0]         delta;
 
-      if (ce_spload) begin
+      if (ss_we && ss_a >= 10'h70 && ss_a <= 10'h9E) begin
+             case (ss_a)
+                 10'h70: state <= ss_din[2:0];
+                 10'h71: count <= ss_din[6:0];
+                 10'h72: index <= ss_din[5:0];
+                 10'h73: data_address[7:0] <= ss_din;
+                 10'h74: data_address[13:8] <= ss_din[5:0];
+                 10'h75: m2_flags <= ss_din;
+                 10'h76: for (ss_i = 0; ss_i <= MAX_SPPL; ss_i = ss_i + 1)
+                             enable[ss_i] <= ss_din[ss_i];
+                 default: begin
+                     if (ss_a >= 10'h77 && ss_a < 10'h77 + MAX_SPPL + 1)
+                         spr_x[ss_a - 10'h77] <= ss_din;
+                     else if (ss_a >= 10'h7F && ss_a < 10'h7F + MAX_SPPL + 1)
+                         spr_d0[ss_a - 10'h7F] <= ss_din;
+                     else if (ss_a >= 10'h87 && ss_a < 10'h87 + MAX_SPPL + 1)
+                         spr_d1[ss_a - 10'h87] <= ss_din;
+                     else if (ss_a >= 10'h8F && ss_a < 10'h8F + MAX_SPPL + 1)
+                         spr_d2[ss_a - 10'h8F] <= ss_din;
+                     else if (ss_a >= 10'h97 && ss_a < 10'h97 + MAX_SPPL + 1)
+                         spr_d3[ss_a - 10'h97] <= ss_din;
+                 end
+             endcase
+          end else if (ce_spload) begin
          
          if (x == 257) begin		// we need step 256 to display the very last sprite pixel
                                  // and one more pixel because the test here is made sync'ed
                                  // by ce_spload which could be very early regarding ce_vdp
             count <= 0;
-            enable <= '{(MAX_SPPL+1){1'b0}};
+            for (ss_i = 0; ss_i <= MAX_SPPL; ss_i = ss_i + 1)
+
+               enable[ss_i] <= 1'b0; // (was '{...} literal: iverilog-clean form)
             state <= COMPARE;
             index <= {6{1'b0}};
             overflow <= 1'b0;
@@ -273,13 +331,16 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
          end
       end 
    end
+
    
    
    always @(posedge clk_sys) begin
       reg [7:0]         collision;
       integer           i;
 
-      if (ce_pix) begin		// ce_vdp?? 
+      if (ss_we && ss_a == 10'h9F) begin
+             { collide, overflow, color } <= { ss_din[7], ss_din[6], ss_din[5:2] };
+          end else if (ce_pix) begin		// ce_vdp?? 
          color <= {4{1'b0}};
          collision = {8{1'b0}};
          for (i = MAX_SPPL; i >= 8; i = i - 1)

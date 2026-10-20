@@ -30,7 +30,16 @@ module jt89_noise(
     input         [2:0] ctrl3,
     input         [3:0] vol,
     input         [9:0] tone2,
-    output        [8:0] snd
+    output        [8:0] snd,
+    // Save-state byte access (frozen only): ss_idx 0/1 = shift[7:0/15:8],
+    // 2 = cnt[7:0], 3 = {5'b0, cnt[10:8]}
+    input               ss_sel,
+    input         [1:0] ss_idx,
+    input         [7:0] ss_din,
+    input               ss_we,
+    output        [7:0] ss_dout
+,
+    input               ss_snd_rst
 );
 
 reg [15:0] shift;
@@ -39,6 +48,7 @@ reg        update;
 
 jt89_vol u_vol(
     .rst    ( rst       ),
+    .ss_snd_rst ( ss_snd_rst ),
     .clk    ( clk       ),
     .clk_en ( clk_en    ),
     .din    ( shift[0]  ),
@@ -48,9 +58,16 @@ jt89_vol u_vol(
 
 reg v;
 
-always @(posedge clk) 
+assign ss_dout = (ss_idx == 2'd0) ? shift[7:0] :
+                     (ss_idx == 2'd1) ? shift[15:8] :
+                     (ss_idx == 2'd2) ? cnt[7:0] : {5'b0, cnt[10:8]};
+
+always @(posedge clk)
     if( rst ) begin
         cnt <= 11'd0;
+    end else if( ss_we && ss_sel && ss_idx[1] ) begin
+        if( ss_idx[0] ) cnt[10:8] <= ss_din[2:0];
+        else cnt[7:0] <= ss_din;
     end else if( clk_en ) begin
         if( cnt==11'd1 ) begin
             case( ctrl3[1:0] )
@@ -69,6 +86,9 @@ wire fb = ctrl3[2]?(shift[0]^shift[3]):shift[0];
 always @(posedge clk)
     if( rst || clr )
         shift <= { 1'b1, 15'd0 };
+    else if( ss_we && ss_sel && !ss_idx[1] )
+        if( ss_idx[0] ) shift[15:8] <= ss_din;
+        else shift[7:0] <= ss_din;
     else if( clk_en ) begin
         if( cnt==11'd1 ) begin
             shift <= (|shift == 1'b0) ? {1'b1, 15'd0 } : {fb, shift[15:1]};

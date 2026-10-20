@@ -25,7 +25,8 @@
 module jt89_vol(
     input         clk,
     input         clk_en,
-    input         rst,
+    input         rst,,
+    input         ss_snd_rst,
     input         din,
     input  [3:0]  vol,
     output reg signed [8:0]  snd   
@@ -55,7 +56,7 @@ always @(*)
     endcase
 
 always @(posedge clk)
-    if( rst )
+    if( rst || ss_snd_rst )
         snd <= 9'd0;
     else if( clk_en )
         snd <= din ? {1'b0,max} : -{1'b0,max};
