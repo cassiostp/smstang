@@ -494,7 +494,8 @@ always @(posedge clk) begin
                 // one arrives, so a save request is nearly always pending during a
                 // dump; ahead of the core-ID reply it starved the firmware's
                 // get_core_id() polls for the whole dump (64 blocks of ~2.9 ms on
-                // SMS) whenever a joypad frame let the next 0x12 land first.                end else if (SS_IF && ss_st_req != ss_st_ack) begin
+                // SMS) whenever a joypad frame let the next 0x12 land first.
+                end else if (SS_IF && ss_st_req != ss_st_ack) begin
                     send_state_next <= SEND_SS_STATUS;
                     send_state <= SEND_HEADER;
                     resp_frame_len <= 1 + 16;
