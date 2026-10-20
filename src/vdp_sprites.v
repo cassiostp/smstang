@@ -15,8 +15,10 @@ module vdp_sprites(clk_sys, ce_vdp, ce_pix, ce_sp, sp64, table_address, char_hig
                        (ss_a >= 10'h8F && ss_a < 10'h8F + MAX_SPPL + 1) ? spr_d2[ss_a - 10'h8F] :
                        (ss_a >= 10'h97 && ss_a < 10'h97 + MAX_SPPL + 1) ? spr_d3[ss_a - 10'h97] : 8'b0;
     wire ss_is_buf = (ss_a >= 10'h77) && (ss_a <= 10'h9E);
-    wire [7:0] ss_shift_mux = (ss_a >= 10'hA0) && (ss_a < 10'hA0 + 5 * (MAX_SPPL + 1)) ?
-                              ss_shift[(ss_a - 10'hA0) / 5] : 8'b0;
+    // Only the addressed shifter drives nonzero (each selects its own
+    // window), so a flat OR replaces the index divider + select mux.
+    wire [7:0] ss_shift_mux = ss_shift[0] | ss_shift[1] | ss_shift[2] | ss_shift[3] |
+                              ss_shift[4] | ss_shift[5] | ss_shift[6] | ss_shift[7];
     assign ss_dout = (ss_a == 10'h70) ? {5'b0, state} :
                      (ss_a == 10'h71) ? count :
                      (ss_a == 10'h72) ? {2'b0, index} :
