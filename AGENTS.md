@@ -71,3 +71,5 @@ iverilog bench, full scale in the soak); `check_audio.py` takes `--hz120`.
 
 - No 60K feature cut: the two builds differ only in `pll/` vs `plla/`; there is no `picorv32` instance (only a comment in `textdisp.v`).
 - PAL ignores the halt, so PAL rate checks must expect free-run.
+
+Run `sh sim/regress.sh quick both` before handing work back; `quick` is the minimum check. Use `full both` for all benches, `--only bench1,bench2` to select, and `--list` for tiers, variants, images and typical times. At most two benches run together; logs and tables are in `sim/.regress/`. `TANGCORE_ROMS` defaults to `~/tangcore-test-bundle/test roms`; missing ROMs and unsupported variants SKIP. Keep ROM-derived output local.

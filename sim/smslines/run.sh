@@ -6,6 +6,7 @@
 # variant: frame-buffer contents, Integer/Full geometry with scanlines
 # off/on, halt entry lines, and the 192/GG baseline compare.
 set -e
+DOCKER_RUN=${DOCKER_RUN:-$(command -v simrun >/dev/null 2>&1 && echo simrun || echo "docker run --rm")}
 VARIANT=${1:-both}
 case $VARIANT in
   standard|hz120) VARIANTS=$VARIANT;;
@@ -33,8 +34,8 @@ for V in $VARIANTS; do
   else
     echo "--- smslines ($V, 720p)"
   fi
-  IV="docker run --rm --name r6smslines_lines_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/smslines tangcore-iv:1"
+  IV="$DOCKER_RUN --name ${SIM_PREFIX:-sim$$}_smslines_$V --user $(id -u):$(id -g) -v $ROOT:/w -w /w/sim/smslines tangcore-iv:1"
   INC="-I $RTL/variant/$V"
-  $IV sh -c "nice -n 10 iverilog -g2012 $INC -o build/tb_smslines_$V.out tb_smslines.v build/sms2hdmi_base.sv $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v && nice -n 10 vvp build/tb_smslines_$V.out"
+  $IV sh -c "iverilog -g2012 $INC -o build/tb_smslines_$V.out tb_smslines.v build/sms2hdmi_base.sv $SCN/hdmi_stub.v $RTL/sms2hdmi.sv $RTL/scanlines.v $RTL/video_fx.v && vvp build/tb_smslines_$V.out"
 done
 echo "run.sh: PASS"
