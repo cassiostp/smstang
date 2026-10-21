@@ -1,7 +1,7 @@
 # SMS 224/240-line bench (issue #45). From this directory:
 #   ./run.sh [standard|hz120|both]   (default both)
 # Assembles the homebrew mode-switch ROM (sms224.asm -> smslines.bin,
-# verifying the R1 224/240 sequence), builds the int/round7 baseline scaler
+# verifying the R1 224/240 sequence), builds the pre-tall-mode baseline scaler
 # for the 192-line pixel-identical check, then runs tb_smslines in each
 # variant: frame-buffer contents, Integer/Full geometry with scanlines
 # off/on, halt entry lines, and the 192/GG baseline compare.
@@ -21,10 +21,13 @@ SCN=../scanlines
 python3 assemble.py
 
 mkdir -p build
-if ! git -C "$ROOT" cat-file -e origin/int/round7:src/sms2hdmi.sv 2>/dev/null; then
-  git -C "$ROOT" fetch origin int/round7 2>&1 | tail -n 2
+# Last integration revision before the tall-mode scaler was merged. A moving
+# int/round7 now has smode inputs which the historical reference leaves open.
+BASE_REF=5c0702eefd968c518751a8adad4476873e77e96b
+if ! git -C "$ROOT" cat-file -e "$BASE_REF:src/sms2hdmi.sv" 2>/dev/null; then
+  git -C "$ROOT" fetch origin "$BASE_REF"
 fi
-git -C "$ROOT" show origin/int/round7:src/sms2hdmi.sv \
+git -C "$ROOT" show "$BASE_REF:src/sms2hdmi.sv" \
   | sed -e 's/^module sms2hdmi (/module sms2hdmi_base (/' > build/sms2hdmi_base.sv
 grep -q '^module sms2hdmi_base (' build/sms2hdmi_base.sv
 
