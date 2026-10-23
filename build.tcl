@@ -152,6 +152,8 @@ set_option -ireg_in_iob 1
 set_option -oreg_in_iob 1
 set_option -ioreg_in_iob 1
 
-set_option -place_option 2
+# Gowin's default place algorithm (3): faster than place 2 here, with far
+# more timing margin (tangcore#67)
+set_option -place_option 3
 
 run all
